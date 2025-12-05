@@ -53,6 +53,8 @@ jobs:
 
       - name: Build
         run: cargo build --release --target ${{ matrix.target }} -p lex-lsp
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
 
       - name: Package (Unix)
         if: runner.os != 'Windows'
