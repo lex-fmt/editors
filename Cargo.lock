@@ -810,7 +810,8 @@ dependencies = [
 [[package]]
 name = "lex-babel"
 version = "0.2.1"
-source = "git+https://github.com/lex-fmt/tools?branch=setup#53dc58e9dd7f2efcc08c8b4c6b39e18e4511bbbe"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9d7a53232c3e8965c919f2081191ae66d953b8c3e83a6e4faead21877dd43a5"
 dependencies = [
  "comrak",
  "html5ever",
