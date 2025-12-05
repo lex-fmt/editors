@@ -1,6 +1,6 @@
 [package]
 name = "lex-lsp"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 authors = ["lex contributors"]
 description = "Language Server Protocol implementation for the lex format"

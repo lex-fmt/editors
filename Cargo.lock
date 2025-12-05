@@ -798,7 +798,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "lex-analysis"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ignore",
  "lex-core",
@@ -841,7 +841,7 @@ dependencies = [
 
 [[package]]
 name = "lex-lsp"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "lex-analysis",
  "lex-babel",
