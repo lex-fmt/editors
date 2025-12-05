@@ -1,0 +1,56 @@
+[
+  {
+    "command": "lex.echo",
+    "title": "Echo",
+    "category": "Lex",
+    "description": "Echo back the input arguments. Useful for testing connection."
+  },
+  {
+    "command": "lex.import",
+    "title": "Import Document",
+    "category": "Lex",
+    "description": "Import a document from another format (e.g., Markdown) into Lex format."
+  },
+  {
+    "command": "lex.export",
+    "title": "Export Document",
+    "category": "Lex",
+    "description": "Export the current Lex document to another format (e.g., HTML, PDF, Markdown)."
+  },
+  {
+    "command": "lex.next_annotation",
+    "title": "Next Annotation",
+    "category": "Lex",
+    "description": "Navigate to the next annotation in the document."
+  },
+  {
+    "command": "lex.previous_annotation",
+    "title": "Previous Annotation",
+    "category": "Lex",
+    "description": "Navigate to the previous annotation in the document."
+  },
+  {
+    "command": "lex.resolve_annotation",
+    "title": "Resolve Annotation",
+    "category": "Lex",
+    "description": "Mark the annotation at the current cursor position as resolved."
+  },
+  {
+    "command": "lex.toggle_annotations",
+    "title": "Toggle Annotations",
+    "category": "Lex",
+    "description": "Toggle the resolution status of the annotation at the current cursor position."
+  },
+  {
+    "command": "lex.insert_asset",
+    "title": "Insert Asset",
+    "category": "Lex",
+    "description": "Insert a reference to an external asset (file) at the current cursor position."
+  },
+  {
+    "command": "lex.insert_verbatim",
+    "title": "Insert Verbatim Block",
+    "category": "Lex",
+    "description": "Insert a new verbatim block with a specified label at the current cursor position."
+  }
+]

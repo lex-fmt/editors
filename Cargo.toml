@@ -1,0 +1,19 @@
+[workspace]
+members = [
+    "lex-analysis",
+    "lex-lsp",
+]
+resolver = "2"
+
+[workspace.dependencies]
+lex-core = "0.2"
+# Use git until lex-babel is published
+lex-babel = { git = "https://github.com/lex-fmt/tools", branch = "setup" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+proptest = "1.4"
+
+[profile.dist]
+inherits = "release"
+lto = "thin"

@@ -1,0 +1,33 @@
+[package]
+name = "lex-lsp"
+version = "0.2.1"
+edition = "2021"
+authors = ["lex contributors"]
+description = "Language Server Protocol implementation for the lex format"
+license = "MIT"
+repository = "https://github.com/lex-fmt/editors"
+keywords = ["lsp", "language-server", "lex", "editor"]
+categories = ["development-tools", "text-editors"]
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "lex-lsp"
+path = "src/bin/lex-lsp.rs"
+
+[dependencies]
+lex-core = { workspace = true }
+lex-analysis = { path = "../lex-analysis" }
+lex-babel = { workspace = true }
+tower-lsp = "0.20"
+lsp-types = "0.94"
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+spellbook = "0.3.5"
+
+[dev-dependencies]
+lex-analysis = { path = "../lex-analysis", features = ["test-support"] }
+tempfile = "3"
+proptest = { workspace = true }
