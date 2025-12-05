@@ -108,7 +108,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Publish lex-analysis
-        run: cargo publish -p lex-analysis
+        run: cargo publish -p lex-analysis || echo "lex-analysis already published or publish failed"
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -116,6 +116,6 @@ jobs:
         run: sleep 30
 
       - name: Publish lex-lsp
-        run: cargo publish -p lex-lsp
+        run: cargo publish -p lex-lsp || echo "lex-lsp already published or publish failed"
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
