@@ -1,7 +1,52 @@
+//! # Spellcheck Feature
+//!
+//! This module provides spellchecking functionality for the Lex Language Server (LSP).
+//! It integrates with the `spellbook` crate to provide dictionary management and checking,
+//! with support for persistent user dictionaries.
+//!
+//! ## Design & Integration
+//!
+//! The spellchecking system is designed to be:
+//! - **Language Agnostic**: Dynamically loads dictionaries based on the document's language setting.
+//! - **Persistent**: Custom words added by the user are saved to a standard user data directory.
+//! - **LSP-Native**: Reports misspellings as standard `Diagnostics`.
+//!
+//! ### Dictionary Management
+//!
+//! Dictionaries are managed via the `spellbook` crate. We use a global `DICTIONARIES` cache
+//! (protected by a `Mutex`) to store loaded dictionaries in memory, avoiding expensive reloads.
+//!
+//! ### Path Resolution Strategy
+//!
+//! To ensure robust dictionary loading across development, testing, and production (bundled) environments,
+//! we employ a multi-step path resolution strategy:
+//!
+//! 1.  **User Data Directory**: We use the `directories` crate to locate the standard OS-specific data directory
+//!     (e.g., `~/Library/Application Support/lex/lex-lsp` on macOS). This is the *primary* location for
+//!     persisting the `custom.dic` file.
+//! 2.  **Bundled Dictionaries**: We search relative paths (e.g., `dictionaries`, `../resources/dictionaries`)
+//!     to find the base Hunspell dictionaries (`.aff` and `.dic` files) distributed with the application.
+//!
+//! ### Persistence (`custom.dic`)
+//!
+//! When a user adds a word to the dictionary:
+//! 1.  The `add_to_dictionary` function resolves the user data directory.
+//! 2.  It appends the new word to the `custom.dic` file in that directory.
+//! 3.  The word is immediately available for future checks.
+//! 4.  The in-memory dictionary cache for that language is invalidated to force a reload (incorporating the new custom word).
+//!
+//! ### Testing
+//!
+//! We support a `LEX_TEST_DATA_DIR` environment variable to override the user data directory during testing.
+//! This allows unit tests (like `test_add_to_dictionary_persistence`) to verify persistence without polluting
+//! the actual user's configuration.
+
+use directories::ProjectDirs;
 use lex_core::lex::ast::elements::{ContentItem, Document, TextLine};
 use lex_core::lex::ast::{AstNode, Container}; // Import AstNode for range()
 use spellbook::Dictionary;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 use tower_lsp::lsp_types::{
     Diagnostic, DiagnosticSeverity, Position as LspPosition, Range as LspRange,
@@ -11,6 +56,13 @@ static DICTIONARIES: OnceLock<Mutex<HashMap<String, Arc<Dictionary>>>> = OnceLoc
 
 fn get_dictionaries() -> &'static Mutex<HashMap<String, Arc<Dictionary>>> {
     DICTIONARIES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn get_data_dir() -> Option<PathBuf> {
+    if let Ok(test_dir) = std::env::var("LEX_TEST_DATA_DIR") {
+        return Some(PathBuf::from(test_dir));
+    }
+    ProjectDirs::from("org", "lex", "lex-lsp").map(|proj| proj.data_dir().to_path_buf())
 }
 
 pub enum DictionaryStatus {
@@ -28,15 +80,20 @@ fn get_dictionary(language: &str) -> DictionaryStatus {
     }
 
     // Try to load from "dictionaries" folder in CWD or adjacent to executable
-    let paths_to_try = vec![
-        std::path::Path::new("dictionaries"),
-        std::path::Path::new("resources/dictionaries"),
-        std::path::Path::new("../dictionaries"),
-        std::path::Path::new("../../dictionaries"),
-        std::path::Path::new("editors/lexed/dictionaries"),
-        std::path::Path::new("../editors/lexed/dictionaries"),
+    let mut paths_to_try = vec![
+        std::path::PathBuf::from("dictionaries"),
+        std::path::PathBuf::from("resources/dictionaries"),
+        std::path::PathBuf::from("../dictionaries"),
+        std::path::PathBuf::from("../../dictionaries"),
+        std::path::PathBuf::from("editors/lexed/dictionaries"),
+        std::path::PathBuf::from("../editors/lexed/dictionaries"),
+        std::path::PathBuf::from("../editors/lexed/dictionaries"),
         // Try absolute path if needed, or user home
     ];
+
+    if let Some(data_dir) = get_data_dir() {
+        paths_to_try.push(data_dir.join("dictionaries"));
+    }
 
     let cwd = std::env::current_dir().unwrap_or_default();
     eprintln!("[Spellcheck] CWD: {cwd:?}");
@@ -60,17 +117,26 @@ fn get_dictionary(language: &str) -> DictionaryStatus {
                 std::fs::read_to_string(&aff_path),
                 std::fs::read_to_string(&dic_path),
             ) {
-                // Load custom dictionary
+                // Load custom dictionary from the same folder (Legacy/Portable)
                 let custom_path = base_path.join("custom.dic");
                 if custom_path.exists() {
                     eprintln!("[Spellcheck] Found custom dictionary at {custom_path:?}");
                     if let Ok(custom_words) = std::fs::read_to_string(&custom_path) {
-                        // Append custom words to dic_content
-                        // Hunspell dic format: first line is count.
-                        // We can try to parse and update count, or just append and hope spellbook handles it.
-                        // Safest is to append.
                         dic_content.push('\n');
                         dic_content.push_str(&custom_words);
+                    }
+                }
+
+                // Load global custom dictionary from user data dir
+                if let Some(data_dir) = get_data_dir() {
+                    let global_custom_path = data_dir.join("dictionaries").join("custom.dic");
+                    // Avoid double loading if base_path IS the data dir
+                    if global_custom_path.exists() && global_custom_path != custom_path {
+                        eprintln!("[Spellcheck] Found global custom dictionary at {global_custom_path:?}");
+                        if let Ok(custom_words) = std::fs::read_to_string(&global_custom_path) {
+                            dic_content.push('\n');
+                            dic_content.push_str(&custom_words);
+                        }
                     }
                 }
 
@@ -229,37 +295,38 @@ pub fn suggest_corrections(word: &str, language: &str) -> Vec<String> {
 }
 
 pub fn add_to_dictionary(word: &str, language: &str) {
-    // Append to custom.dic in the first valid dictionaries folder found
-    let paths_to_try = vec![
-        std::path::Path::new("dictionaries"),
-        std::path::Path::new("resources/dictionaries"),
-        std::path::Path::new("../dictionaries"),
-        std::path::Path::new("../../dictionaries"),
-        std::path::Path::new("editors/lexed/dictionaries"),
-        std::path::Path::new("../editors/lexed/dictionaries"),
-    ];
+    // Prefer user data directory
+    let target_dir = if let Some(dir) = get_data_dir() {
+        dir.join("dictionaries")
+    } else {
+        // Fallback to local "dictionaries" folder if we can't get data dir
+        PathBuf::from("dictionaries")
+    };
 
-    for base_path in paths_to_try {
-        if base_path.exists() {
-            let custom_path = base_path.join("custom.dic");
-            use std::io::Write;
-            if let Ok(mut file) = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&custom_path)
-            {
-                if let Err(e) = writeln!(file, "{word}") {
-                    eprintln!("Failed to write to custom dictionary: {e}");
-                } else {
-                    // Invalidate cache for this language so it reloads with new word
-                    let mut cache = get_dictionaries().lock().unwrap();
-                    cache.remove(language);
-                }
-                return;
-            }
-        }
+    if let Err(e) = std::fs::create_dir_all(&target_dir) {
+        eprintln!("[Spellcheck] Failed to create dictionaries directory: {e}");
+        return;
     }
-    eprintln!("Could not find dictionaries folder to save custom word.");
+
+    let custom_path = target_dir.join("custom.dic");
+
+    use std::io::Write;
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&custom_path)
+    {
+        if let Err(e) = writeln!(file, "{word}") {
+            eprintln!("Failed to write to custom dictionary: {e}");
+        } else {
+            eprintln!("[Spellcheck] Added '{word}' to {custom_path:?}");
+            // Invalidate cache for this language so it reloads with new word
+            let mut cache = get_dictionaries().lock().unwrap();
+            cache.remove(language);
+        }
+        return;
+    }
+    eprintln!("Could not open custom dictionary for writing at {custom_path:?}");
 }
 
 #[cfg(test)]
@@ -313,5 +380,59 @@ mod tests {
 
         let _suggestions = suggest_corrections("helo", "test_suggest");
         // "helo" -> "hello"
+    }
+
+    #[test]
+    fn test_add_to_dictionary_persistence() {
+        // Create a temp dir for user data
+        let temp = tempfile::tempdir().unwrap();
+        let data_dir = temp.path().to_path_buf();
+        let dict_dir = data_dir.join("dictionaries");
+        std::fs::create_dir_all(&dict_dir).unwrap();
+
+        // Create a fake base dictionary
+        let lang = "test_persistence";
+        let aff = "SET UTF-8\nTRY a";
+        let dic = "1\nhello";
+        std::fs::write(dict_dir.join(format!("{lang}.aff")), aff).unwrap();
+        std::fs::write(dict_dir.join(format!("{lang}.dic")), dic).unwrap();
+
+        // Set env var to trick get_data_dir
+        unsafe {
+            std::env::set_var("LEX_TEST_DATA_DIR", data_dir.to_str().unwrap());
+        }
+
+        // Add a word
+        add_to_dictionary("foobar", lang);
+
+        // Verify file exists
+        let custom_dic = dict_dir.join("custom.dic");
+        assert!(custom_dic.exists());
+        let content = std::fs::read_to_string(&custom_dic).unwrap();
+        assert!(content.contains("foobar"));
+
+        // Verify check_document picks it up
+        // First, ensure cache is empty or doesn't have it (add_to_dictionary should have cleared it)
+        {
+            let mut cache = get_dictionaries().lock().unwrap();
+            cache.remove(lang);
+        }
+
+        let range = Range::new(0..11, Position::new(0, 0), Position::new(0, 11));
+        let para = Paragraph::from_line("hello foobar".to_string()).at(range.clone());
+        let mut session = Session::with_title("Title".to_string());
+        session.children_mut().push(ContentItem::Paragraph(para));
+        let doc = Document {
+            root: session,
+            ..Default::default()
+        };
+
+        // It should pass now
+        let diags = check_document(&doc, lang);
+        assert_eq!(diags.diagnostics.len(), 0);
+
+        unsafe {
+            std::env::remove_var("LEX_TEST_DATA_DIR");
+        }
     }
 }
