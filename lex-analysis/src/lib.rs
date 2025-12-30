@@ -50,6 +50,7 @@ pub mod utils;
 // Analysis features
 pub mod annotations;
 pub mod completion;
+pub mod diagnostics;
 pub mod document_symbols;
 pub mod folding_ranges;
 pub mod go_to_definition;
