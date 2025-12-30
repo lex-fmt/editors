@@ -92,6 +92,19 @@ pub fn execute_command(command: &str, arguments: &[Value]) -> Result<Option<Valu
                 }
             }
         }
+        COMMAND_ADD_TO_DICTIONARY => {
+            let word = arguments
+                .first()
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| Error::invalid_params("Missing 'word' argument"))?;
+            let language = arguments
+                .get(1)
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| Error::invalid_params("Missing 'language' argument"))?;
+
+            crate::features::spellcheck::add_to_dictionary(word, language);
+            Ok(None)
+        }
         _ => Err(Error::invalid_request()),
     }
 }

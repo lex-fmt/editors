@@ -755,6 +755,7 @@ where
                     commands::COMMAND_TOGGLE_ANNOTATIONS.to_string(),
                     commands::COMMAND_INSERT_ASSET.to_string(),
                     commands::COMMAND_INSERT_VERBATIM.to_string(),
+                    commands::COMMAND_ADD_TO_DICTIONARY.to_string(),
                 ],
                 work_done_progress_options: WorkDoneProgressOptions::default(),
             }),
@@ -998,13 +999,19 @@ where
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
         let mut actions = Vec::new();
 
+        let config = self.config.read().await;
+        let language = config.spellcheck.language.clone();
+
+        eprintln!("[LSP] code_action called. Language: {language}, Diagnostics count: {}", params.context.diagnostics.len());
+
         for diagnostic in params.context.diagnostics {
+            eprintln!("[LSP] Inspecting diagnostic source: {:?}", diagnostic.source);
             if diagnostic.source.as_deref() == Some("lex-spell") {
                 // It's a spelling error
                 let word = diagnostic.message.trim_start_matches("Unknown word: ");
 
                 // 1. Suggestions
-                let suggestions = crate::features::spellcheck::suggest_corrections(word, "en_US");
+                let suggestions = crate::features::spellcheck::suggest_corrections(word, &language);
                 for suggestion in suggestions {
                     let action = CodeAction {
                         title: suggestion.clone(),
@@ -1039,7 +1046,7 @@ where
                         command: commands::COMMAND_ADD_TO_DICTIONARY.to_string(),
                         arguments: Some(vec![
                             json!(word),
-                            json!("en_US"),
+                            json!(language),
                             json!(params.text_document.uri.to_string()),
                         ]),
                     }),
