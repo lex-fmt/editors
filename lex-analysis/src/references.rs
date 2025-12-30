@@ -112,7 +112,7 @@ fn definition_ranges(document: &Document, subject: &str) -> Vec<Range> {
         .collect()
 }
 
-fn reference_occurrences(document: &Document, targets: &[ReferenceTarget]) -> Vec<Range> {
+pub fn reference_occurrences(document: &Document, targets: &[ReferenceTarget]) -> Vec<Range> {
     let mut matches = Vec::new();
     for_each_text_content(document, &mut |text| {
         for span in extract_inline_spans(text) {

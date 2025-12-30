@@ -1,21 +1,36 @@
 use crate::inline::InlineSpanKind;
 use crate::reference_targets::{targets_from_reference_type, ReferenceTarget};
 use crate::utils::{
-    find_definitions_by_subject, find_sessions_by_identifier, reference_span_at_position,
+    find_annotation_at_position, find_definitions_by_subject, find_sessions_by_identifier,
+    reference_span_at_position,
 };
 use lex_core::lex::ast::traits::AstNode;
 use lex_core::lex::ast::{Document, Position, Range};
+use crate::reference_targets::targets_from_annotation;
+use crate::references::reference_occurrences;
 
 pub fn goto_definition(document: &Document, position: Position) -> Vec<Range> {
-    let Some(span) = reference_span_at_position(document, position) else {
-        return Vec::new();
-    };
-    let InlineSpanKind::Reference(reference_type) = span.kind else {
-        return Vec::new();
-    };
+    if let Some(span) = reference_span_at_position(document, position) {
+        if let InlineSpanKind::Reference(reference_type) = span.kind {
+            let targets = targets_from_reference_type(&reference_type);
+            return resolve_targets(document, &targets);
+        }
+    }
 
-    let targets = targets_from_reference_type(&reference_type);
-    resolve_targets(document, &targets)
+    // Reverse lookup: If we are on an annotation (footnote definition), go to references
+    if let Some(annotation) = find_annotation_at_position(document, position) {
+        // Ensure we are strictly on the header (label)
+        let header = annotation.header_location();
+        if header.contains(position) {
+                // Find references to this annotation
+                // Treat this as finding usages of the annotation's label
+                let targets = targets_from_annotation(annotation);
+                // We want to find REFERENCES that match these targets
+                return reference_occurrences(document, &targets);
+        }
+    }
+
+    Vec::new()
 }
 
 fn resolve_targets(document: &Document, targets: &[ReferenceTarget]) -> Vec<Range> {
