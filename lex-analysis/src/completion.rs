@@ -104,7 +104,15 @@ pub fn completion_items(
     // Handle explicit trigger characters first
     if let Some(trigger) = trigger_char {
         if trigger == "@" {
-            return asset_path_completions(workspace);
+            let mut items = asset_path_completions(workspace);
+            items.extend(macro_completions(document));
+            return items;
+        }
+    }
+
+    if let Some(trigger) = trigger_char {
+        if trigger == "|" {
+            return table_row_completions(document, position);
         }
     }
 
@@ -114,6 +122,31 @@ pub fn completion_items(
         CompletionContext::Reference => reference_completions(document, workspace),
         CompletionContext::General => reference_completions(document, workspace),
     }
+}
+
+fn macro_completions(_document: &Document) -> Vec<CompletionCandidate> {
+    vec![
+        CompletionCandidate::new("@table", CompletionItemKind::SNIPPET)
+            .with_detail("Insert table snippet")
+            .with_insert_text(":: doc.table\n| Header 1 | Header 2 |\n| -------- | -------- |\n| Cell 1   | Cell 2   |\n::\n"),
+        CompletionCandidate::new("@image", CompletionItemKind::SNIPPET)
+            .with_detail("Insert image snippet")
+            .with_insert_text(":: doc.image src=\"$1\"\n"),
+        CompletionCandidate::new("@note", CompletionItemKind::SNIPPET)
+            .with_detail("Insert note reference")
+            .with_insert_text("[^$1]"),
+    ]
+}
+
+fn table_row_completions(_document: &Document, _position: Position) -> Vec<CompletionCandidate> {
+    // Basic implementation: if we are on a line starting with |, suggest a row structure?
+    // For now, just a generic row snippet.
+    // In a real implementation, we would count pipes in the previous line.
+    vec![
+        CompletionCandidate::new("New Row", CompletionItemKind::SNIPPET)
+            .with_detail("Insert table row")
+            .with_insert_text("|  |  |"),
+    ]
 }
 
 /// Returns only file path completions for asset references (@-triggered).
@@ -685,5 +718,27 @@ Code sample:
         // Should NOT have annotation labels or definition subjects
         assert!(!completions.iter().any(|item| item.label == "note"));
         assert!(!completions.iter().any(|item| item.label == "Cache"));
+    }
+
+    #[test]
+    fn macro_completions_suggested_on_at() {
+        let _document = parse_sample();
+        // Wait, `parse_sample` in `completion.rs` returns `Document` (line 544).
+        // But `tests` module uses `fn parse_sample() -> Document`.
+        // So I can use it directly.
+        let document = parse_sample(); 
+        let temp = tempdir().expect("temp dir");
+        let root = temp.path();
+        let document_path = root.join("doc.lex");
+        // We need a workspace to call asset_path_completions (which is called by @ trigger)
+        let workspace = CompletionWorkspace {
+            project_root: root.to_path_buf(),
+            document_path,
+        };
+
+        let completions = completion_items(&document, position_at(0), Some(&workspace), Some("@"));
+        assert!(completions.iter().any(|c| c.label == "@table"));
+        assert!(completions.iter().any(|c| c.label == "@note"));
+        assert!(completions.iter().any(|c| c.label == "@image"));
     }
 }
