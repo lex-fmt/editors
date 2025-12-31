@@ -1313,6 +1313,36 @@ where
     }
 }
 
+fn to_lsp_diagnostic(diag: AnalysisDiagnostic) -> Diagnostic {
+    let severity = match diag.kind {
+        DiagnosticKind::MissingFootnoteDefinition => {
+            tower_lsp::lsp_types::DiagnosticSeverity::ERROR
+        }
+        DiagnosticKind::UnusedFootnoteDefinition => {
+            tower_lsp::lsp_types::DiagnosticSeverity::WARNING
+        }
+    };
+
+    let code = match diag.kind {
+        DiagnosticKind::MissingFootnoteDefinition => "missing-footnote",
+        DiagnosticKind::UnusedFootnoteDefinition => "unused-footnote",
+    };
+
+    Diagnostic {
+        range: to_lsp_range(&diag.range),
+        severity: Some(severity),
+        code: Some(tower_lsp::lsp_types::NumberOrString::String(
+            code.to_string(),
+        )),
+        code_description: None,
+        source: Some("lex".to_string()),
+        message: diag.message,
+        related_information: None,
+        tags: None,
+        data: None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2034,35 +2064,5 @@ mod tests {
         assert_eq!(rules.max_blank_lines, 3);
         assert!(!rules.normalize_seq_markers);
         assert_eq!(rules.unordered_seq_marker, '*');
-    }
-}
-
-fn to_lsp_diagnostic(diag: AnalysisDiagnostic) -> Diagnostic {
-    let severity = match diag.kind {
-        DiagnosticKind::MissingFootnoteDefinition => {
-            tower_lsp::lsp_types::DiagnosticSeverity::ERROR
-        }
-        DiagnosticKind::UnusedFootnoteDefinition => {
-            tower_lsp::lsp_types::DiagnosticSeverity::WARNING
-        }
-    };
-
-    let code = match diag.kind {
-        DiagnosticKind::MissingFootnoteDefinition => "missing-footnote",
-        DiagnosticKind::UnusedFootnoteDefinition => "unused-footnote",
-    };
-
-    Diagnostic {
-        range: to_lsp_range(&diag.range),
-        severity: Some(severity),
-        code: Some(tower_lsp::lsp_types::NumberOrString::String(
-            code.to_string(),
-        )),
-        code_description: None,
-        source: Some("lex".to_string()),
-        message: diag.message,
-        related_information: None,
-        tags: None,
-        data: None,
     }
 }
