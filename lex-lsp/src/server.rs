@@ -1011,7 +1011,11 @@ where
 
         // 0. Compute available actions (Lex features)
         if let Some(entry) = self.documents.get(&params.text_document.uri).await {
-            let lex_actions = crate::features::available_actions::compute_actions(&entry.document, &params);
+            let lex_actions = crate::features::available_actions::compute_actions(
+                &entry.document, 
+                &entry.text, 
+                &params
+            );
             for action in lex_actions {
                 actions.push(tower_lsp::lsp_types::CodeActionOrCommand::CodeAction(action));
             }

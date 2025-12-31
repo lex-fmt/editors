@@ -1,10 +1,10 @@
 use lex_core::lex::ast::Document;
 use tower_lsp::lsp_types::{CodeAction, CodeActionKind, CodeActionParams, TextEdit, WorkspaceEdit};
 use std::collections::HashMap;
-use crate::features::commands;
 
 pub fn compute_actions(
-    _document: &Document,
+    document: &Document,
+    source: &str,
     params: &CodeActionParams,
 ) -> Vec<CodeAction> {
     let mut actions = Vec::new();
@@ -16,6 +16,8 @@ pub fn compute_actions(
                 "missing-footnote" => {
                     // QuickFix: Add footnote definition
                      if let Some(label) = parse_label_from_message(&diagnostic.message) {
+                        let line_count = source.lines().count().max(1) as u32;
+                        
                         let _action = CodeAction {
                             title: format!("Add definition for footnote [{}]", label),
                             kind: Some(CodeActionKind::QUICKFIX),
@@ -24,15 +26,17 @@ pub fn compute_actions(
                                 changes: Some(HashMap::from([(
                                     params.text_document.uri.clone(),
                                     vec![TextEdit {
-                                        // Insert at end of file (placeholder logic)
-                                        // We need the end position of the document.
-                                        // But we lack easy access here without source text length.
-                                        // We'll use a specific position if possible, or omit edit for now.
-                                        // Since we can't implement it perfectly without text, we'll implement it as a Command instead?
-                                        // "Insert missing footnote" command.
-                                        // Then `server.rs` executes it.
-                                        range: diagnostic.range, 
-                                        new_text: format!("\n\n:: {} ::\n\n::", label),
+                                        range: tower_lsp::lsp_types::Range {
+                                            start: tower_lsp::lsp_types::Position {
+                                                line: line_count, 
+                                                character: 0,
+                                            },
+                                            end: tower_lsp::lsp_types::Position {
+                                                line: line_count,
+                                                character: 0,
+                                            },
+                                        },
+                                        new_text: format!("\n\n:: {} ::\n\n", label),
                                     }],
                                 )])),
                                 ..Default::default()
@@ -42,8 +46,7 @@ pub fn compute_actions(
                             disabled: None,
                             data: None,
                         };
-                        // Only add if we can compute valid edit (omitted for now due to complexity without text)
-                        // actions.push(action); 
+                        // actions.push(_action); // Uncomment to enable
                      }
                 }
                 _ => {}
@@ -56,20 +59,42 @@ pub fn compute_actions(
     let wants_refactor = requested_kind.map_or(true, |k| k.as_str().starts_with("source") || k.as_str().starts_with("refactor"));
 
     if wants_refactor {
-        actions.push(CodeAction {
-            title: "Reorder footnotes".to_string(),
-            kind: Some(CodeActionKind::SOURCE),
-            diagnostics: None,
-            edit: None,
-            command: Some(tower_lsp::lsp_types::Command {
+        // Compute reordered content
+        let new_content = crate::features::footnotes::reorder_footnotes(document, source);
+        
+        if new_content != source {
+            let line_count = source.lines().count().max(1) as u32;
+            let last_line_idx = line_count - 1;
+            let last_char = source.lines().last().map(|l| l.chars().count()).unwrap_or(0) as u32;
+
+            let end_pos = tower_lsp::lsp_types::Position {
+                line: last_line_idx,
+                character: last_char,
+            };
+
+            actions.push(CodeAction {
                 title: "Reorder footnotes".to_string(),
-                command: commands::COMMAND_FOOTNOTES_REORDER.to_string(),
-                arguments: None, // Arguments must be supplied by client or handled by server specifically
-            }),
-            is_preferred: None,
-            disabled: None,
-            data: None,
-        });
+                kind: Some(CodeActionKind::SOURCE),
+                diagnostics: None,
+                edit: Some(WorkspaceEdit {
+                    changes: Some(HashMap::from([(
+                        params.text_document.uri.clone(),
+                        vec![TextEdit {
+                            range: tower_lsp::lsp_types::Range {
+                                start: tower_lsp::lsp_types::Position { line: 0, character: 0 },
+                                end: end_pos,
+                            },
+                            new_text: new_content,
+                        }],
+                    )])),
+                    ..Default::default()
+                }),
+                command: None,
+                is_preferred: None,
+                disabled: None,
+                data: None,
+            });
+        }
     }
 
     actions
