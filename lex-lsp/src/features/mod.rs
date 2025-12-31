@@ -3,6 +3,7 @@ pub mod commands;
 pub(crate) mod document_links;
 pub mod formatting;
 pub mod footnotes;
+pub mod available_actions;
 pub mod spellcheck;
 
 // Re-export analysis features from lex-analysis

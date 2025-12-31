@@ -1009,7 +1009,15 @@ where
 
         eprintln!("[LSP] code_action called. Language: {language}, Diagnostics count: {}", params.context.diagnostics.len());
 
-        for diagnostic in params.context.diagnostics {
+        // 0. Compute available actions (Lex features)
+        if let Some(entry) = self.documents.get(&params.text_document.uri).await {
+            let lex_actions = crate::features::available_actions::compute_actions(&entry.document, &params);
+            for action in lex_actions {
+                actions.push(tower_lsp::lsp_types::CodeActionOrCommand::CodeAction(action));
+            }
+        }
+
+        for diagnostic in params.context.diagnostics.clone() {
             eprintln!("[LSP] Inspecting diagnostic source: {:?}", diagnostic.source);
             if diagnostic.source.as_deref() == Some("lex-spell") {
                 // It's a spelling error
@@ -2008,10 +2016,15 @@ fn to_lsp_diagnostic(diag: AnalysisDiagnostic) -> Diagnostic {
         DiagnosticKind::UnusedFootnoteDefinition => tower_lsp::lsp_types::DiagnosticSeverity::WARNING,
     };
     
+    let code = match diag.kind {
+        DiagnosticKind::MissingFootnoteDefinition => "missing-footnote",
+        DiagnosticKind::UnusedFootnoteDefinition => "unused-footnote",
+    };
+
     Diagnostic {
         range: to_lsp_range(&diag.range),
         severity: Some(severity),
-        code: None,
+        code: Some(tower_lsp::lsp_types::NumberOrString::String(code.to_string())),
         code_description: None,
         source: Some("lex".to_string()),
         message: diag.message,
