@@ -6,7 +6,7 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-lex-core = "0.2.3"
+lex-core = "0.2.2"
 lex-babel = "0.2.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
