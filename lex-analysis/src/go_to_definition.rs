@@ -1,13 +1,13 @@
 use crate::inline::InlineSpanKind;
+use crate::reference_targets::targets_from_annotation;
 use crate::reference_targets::{targets_from_reference_type, ReferenceTarget};
+use crate::references::reference_occurrences;
 use crate::utils::{
     find_annotation_at_position, find_definitions_by_subject, find_sessions_by_identifier,
     reference_span_at_position,
 };
 use lex_core::lex::ast::traits::AstNode;
 use lex_core::lex::ast::{Document, Position, Range};
-use crate::reference_targets::targets_from_annotation;
-use crate::references::reference_occurrences;
 
 pub fn goto_definition(document: &Document, position: Position) -> Vec<Range> {
     if let Some(span) = reference_span_at_position(document, position) {
@@ -22,11 +22,11 @@ pub fn goto_definition(document: &Document, position: Position) -> Vec<Range> {
         // Ensure we are strictly on the header (label)
         let header = annotation.header_location();
         if header.contains(position) {
-                // Find references to this annotation
-                // Treat this as finding usages of the annotation's label
-                let targets = targets_from_annotation(annotation);
-                // We want to find REFERENCES that match these targets
-                return reference_occurrences(document, &targets);
+            // Find references to this annotation
+            // Treat this as finding usages of the annotation's label
+            let targets = targets_from_annotation(annotation);
+            // We want to find REFERENCES that match these targets
+            return reference_occurrences(document, &targets);
         }
     }
 
@@ -42,7 +42,7 @@ fn resolve_targets(document: &Document, targets: &[ReferenceTarget]) -> Vec<Rang
                 for annotation in document.find_annotations_by_label(label) {
                     ranges.push(annotation.header_location().clone());
                 }
-                
+
                 // Find matching list items in Notes session
                 if let Some(notes_session) = crate::utils::find_notes_session(document) {
                     for item in &notes_session.children {
@@ -50,7 +50,10 @@ fn resolve_targets(document: &Document, targets: &[ReferenceTarget]) -> Vec<Rang
                             for entry in &l.items {
                                 if let lex_core::lex::ast::ContentItem::ListItem(li) = entry {
                                     let marker = li.marker();
-                                    let item_label = marker.trim().trim_end_matches(['.', ')', ':'].as_ref()).trim();
+                                    let item_label = marker
+                                        .trim()
+                                        .trim_end_matches(['.', ')', ':'].as_ref())
+                                        .trim();
                                     if item_label == label {
                                         ranges.push(li.range().clone());
                                     }

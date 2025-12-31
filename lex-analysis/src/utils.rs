@@ -680,9 +680,10 @@ fn is_list_only_session(session: &Session) -> bool {
     if session.children.is_empty() {
         return false;
     }
-    session.children.iter().all(|child| {
-        matches!(child, ContentItem::List(_) | ContentItem::BlankLineGroup(_))
-    })
+    session
+        .children
+        .iter()
+        .all(|child| matches!(child, ContentItem::List(_) | ContentItem::BlankLineGroup(_)))
 }
 
 /// Collects all footnote definitions from a document.
@@ -692,7 +693,9 @@ fn is_list_only_session(session: &Session) -> bool {
 /// 2. **List items**: Numbered list items within a Notes/Footnotes session
 ///
 /// Returns a vector of (label, range) pairs for each definition found.
-pub fn collect_footnote_definitions(document: &Document) -> Vec<(String, lex_core::lex::ast::Range)> {
+pub fn collect_footnote_definitions(
+    document: &Document,
+) -> Vec<(String, lex_core::lex::ast::Range)> {
     let mut defs = Vec::new();
 
     // Annotations with non-empty labels
@@ -710,25 +713,31 @@ pub fn collect_footnote_definitions(document: &Document) -> Vec<(String, lex_cor
     defs
 }
 
-fn collect_footnote_items_in_container(items: &[ContentItem], out: &mut Vec<(String, lex_core::lex::ast::Range)>) {
+fn collect_footnote_items_in_container(
+    items: &[ContentItem],
+    out: &mut Vec<(String, lex_core::lex::ast::Range)>,
+) {
     for item in items {
         match item {
             ContentItem::List(l) => {
-                 // Iterate manually because ListContainer iteration yields &ContentItem
-                 // If ListContainer implements IntoIterator, iterate it.
-                 // l.items is the container.
-                 // In previous steps we saw iterating `l.items` yields `ContentItem`.
-                 for entry in &l.items {
-                     if let ContentItem::ListItem(li) = entry {
-                          let marker = li.marker();
-                          // "1." -> "1", "1)" -> "1"
-                          let label = marker.trim().trim_end_matches(['.', ')', ':'].as_ref()).trim();
-                          if !label.is_empty() {
-                               out.push((label.to_string(), li.range().clone()));
-                          }
-                     }
-                 }
-            },
+                // Iterate manually because ListContainer iteration yields &ContentItem
+                // If ListContainer implements IntoIterator, iterate it.
+                // l.items is the container.
+                // In previous steps we saw iterating `l.items` yields `ContentItem`.
+                for entry in &l.items {
+                    if let ContentItem::ListItem(li) = entry {
+                        let marker = li.marker();
+                        // "1." -> "1", "1)" -> "1"
+                        let label = marker
+                            .trim()
+                            .trim_end_matches(['.', ')', ':'].as_ref())
+                            .trim();
+                        if !label.is_empty() {
+                            out.push((label.to_string(), li.range().clone()));
+                        }
+                    }
+                }
+            }
             ContentItem::Session(s) => collect_footnote_items_in_container(&s.children, out),
             _ => {}
         }
