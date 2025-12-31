@@ -97,6 +97,7 @@ pub trait FeatureProvider: Send + Sync + 'static {
         &self,
         document: &Document,
         position: AstPosition,
+        current_line: Option<&str>,
         workspace: Option<&CompletionWorkspace>,
         trigger_char: Option<&str>,
     ) -> Vec<CompletionCandidate>;
@@ -171,10 +172,11 @@ impl FeatureProvider for DefaultFeatureProvider {
         &self,
         document: &Document,
         position: AstPosition,
+        current_line: Option<&str>,
         workspace: Option<&CompletionWorkspace>,
         trigger_char: Option<&str>,
     ) -> Vec<CompletionCandidate> {
-        completion_items(document, position, workspace, trigger_char)
+         completion_items(document, position, current_line, workspace, trigger_char)
     }
 
     fn execute_command(&self, command: &str, arguments: &[Value]) -> Result<Option<Value>> {
@@ -980,7 +982,8 @@ where
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let uri = params.text_document_position.text_document.uri;
-        if let Some(document) = self.document(&uri).await {
+        if let Some(entry) = self.document_entry(&uri).await {
+            let DocumentEntry { document, text } = entry;
             let position = from_lsp_position(params.text_document_position.position);
             let workspace = self.workspace_context_for_uri(&uri).await;
 
@@ -990,9 +993,16 @@ where
                 .as_ref()
                 .and_then(|ctx| ctx.trigger_character.as_deref());
 
-            let candidates =
-                self.features
-                    .completion(&document, position, workspace.as_ref(), trigger_char);
+            // Extract current line text for resilient parsing (e.g. "::" without following newline)
+            let current_line = text.lines().nth(position.line);
+
+            let candidates = self.features.completion(
+                &document,
+                position,
+                current_line,
+                workspace.as_ref(),
+                trigger_char,
+            );
             let items: Vec<CompletionItem> =
                 candidates.iter().map(to_lsp_completion_item).collect();
             Ok(Some(CompletionResponse::Array(items)))
@@ -1446,6 +1456,7 @@ mod tests {
             &self,
             _: &Document,
             _: AstPosition,
+            _: Option<&str>,
             _: Option<&CompletionWorkspace>,
             _: Option<&str>,
         ) -> Vec<CompletionCandidate> {
