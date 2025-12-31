@@ -1,9 +1,9 @@
 // LSP-specific features (use diff algorithm, TextEdit, etc.)
+pub mod available_actions;
 pub mod commands;
 pub(crate) mod document_links;
-pub mod formatting;
 pub mod footnotes;
-pub mod available_actions;
+pub mod formatting;
 pub mod spellcheck;
 
 // Re-export analysis features from lex-analysis

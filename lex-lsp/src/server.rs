@@ -16,8 +16,10 @@ use crate::features::semantic_tokens::{
     collect_semantic_tokens, LexSemanticToken, SEMANTIC_TOKEN_KINDS,
 };
 use crate::features::spellcheck::SpellcheckResult;
-use lex_analysis::diagnostics::{analyze as analyze_diagnostics, AnalysisDiagnostic, DiagnosticKind};
 use lex_analysis::completion::{completion_items, CompletionCandidate, CompletionWorkspace};
+use lex_analysis::diagnostics::{
+    analyze as analyze_diagnostics, AnalysisDiagnostic, DiagnosticKind,
+};
 use lex_babel::formats::lex::formatting_rules::FormattingRules;
 use lex_babel::templates::{
     build_asset_snippet, build_verbatim_snippet, AssetSnippetRequest, VerbatimSnippetRequest,
@@ -176,7 +178,7 @@ impl FeatureProvider for DefaultFeatureProvider {
         workspace: Option<&CompletionWorkspace>,
         trigger_char: Option<&str>,
     ) -> Vec<CompletionCandidate> {
-         completion_items(document, position, current_line, workspace, trigger_char)
+        completion_items(document, position, current_line, workspace, trigger_char)
     }
 
     fn execute_command(&self, command: &str, arguments: &[Value]) -> Result<Option<Value>> {
@@ -311,27 +313,29 @@ where
         if let Some(entry) = self.documents.upsert(uri.clone(), text).await {
             // Run analysis diagnostics
             let analysis_diags = analyze_diagnostics(&entry.document);
-            
+
             // Combine diagnostics
             let mut all_diagnostics = Vec::new();
-            
+
             let config = self.config.read().await;
             if config.spellcheck.enabled {
-                 let spell_result = self
+                let spell_result = self
                     .features
                     .check_spelling(&entry.document, &config.spellcheck.language);
-                 if let Some(error) = spell_result.error {
+                if let Some(error) = spell_result.error {
                     self._client.show_message(MessageType::WARNING, error).await;
-                 }
-                 all_diagnostics.extend(spell_result.diagnostics);
+                }
+                all_diagnostics.extend(spell_result.diagnostics);
             }
-            
+
             // Convert analysis diagnostics to LSP diagnostics
             for diag in analysis_diags {
                 all_diagnostics.push(to_lsp_diagnostic(diag));
             }
 
-            self._client.publish_diagnostics(uri, all_diagnostics, None).await;
+            self._client
+                .publish_diagnostics(uri, all_diagnostics, None)
+                .await;
         }
     }
 
@@ -1017,22 +1021,30 @@ where
         let config = self.config.read().await;
         let language = config.spellcheck.language.clone();
 
-        eprintln!("[LSP] code_action called. Language: {language}, Diagnostics count: {}", params.context.diagnostics.len());
+        eprintln!(
+            "[LSP] code_action called. Language: {language}, Diagnostics count: {}",
+            params.context.diagnostics.len()
+        );
 
         // 0. Compute available actions (Lex features)
         if let Some(entry) = self.documents.get(&params.text_document.uri).await {
             let lex_actions = crate::features::available_actions::compute_actions(
-                &entry.document, 
-                &entry.text, 
-                &params
+                &entry.document,
+                &entry.text,
+                &params,
             );
             for action in lex_actions {
-                actions.push(tower_lsp::lsp_types::CodeActionOrCommand::CodeAction(action));
+                actions.push(tower_lsp::lsp_types::CodeActionOrCommand::CodeAction(
+                    action,
+                ));
             }
         }
 
         for diagnostic in params.context.diagnostics.clone() {
-            eprintln!("[LSP] Inspecting diagnostic source: {:?}", diagnostic.source);
+            eprintln!(
+                "[LSP] Inspecting diagnostic source: {:?}",
+                diagnostic.source
+            );
             if diagnostic.source.as_deref() == Some("lex-spell") {
                 // It's a spelling error
                 let word = diagnostic.message.trim_start_matches("Unknown word: ");
@@ -1298,6 +1310,36 @@ where
                 .features
                 .execute_command(&params.command, &params.arguments),
         }
+    }
+}
+
+fn to_lsp_diagnostic(diag: AnalysisDiagnostic) -> Diagnostic {
+    let severity = match diag.kind {
+        DiagnosticKind::MissingFootnoteDefinition => {
+            tower_lsp::lsp_types::DiagnosticSeverity::ERROR
+        }
+        DiagnosticKind::UnusedFootnoteDefinition => {
+            tower_lsp::lsp_types::DiagnosticSeverity::WARNING
+        }
+    };
+
+    let code = match diag.kind {
+        DiagnosticKind::MissingFootnoteDefinition => "missing-footnote",
+        DiagnosticKind::UnusedFootnoteDefinition => "unused-footnote",
+    };
+
+    Diagnostic {
+        range: to_lsp_range(&diag.range),
+        severity: Some(severity),
+        code: Some(tower_lsp::lsp_types::NumberOrString::String(
+            code.to_string(),
+        )),
+        code_description: None,
+        source: Some("lex".to_string()),
+        message: diag.message,
+        related_information: None,
+        tags: None,
+        data: None,
     }
 }
 
@@ -2022,29 +2064,5 @@ mod tests {
         assert_eq!(rules.max_blank_lines, 3);
         assert!(!rules.normalize_seq_markers);
         assert_eq!(rules.unordered_seq_marker, '*');
-    }
-}
-
-fn to_lsp_diagnostic(diag: AnalysisDiagnostic) -> Diagnostic {
-    let severity = match diag.kind {
-        DiagnosticKind::MissingFootnoteDefinition => tower_lsp::lsp_types::DiagnosticSeverity::ERROR,
-        DiagnosticKind::UnusedFootnoteDefinition => tower_lsp::lsp_types::DiagnosticSeverity::WARNING,
-    };
-    
-    let code = match diag.kind {
-        DiagnosticKind::MissingFootnoteDefinition => "missing-footnote",
-        DiagnosticKind::UnusedFootnoteDefinition => "unused-footnote",
-    };
-
-    Diagnostic {
-        range: to_lsp_range(&diag.range),
-        severity: Some(severity),
-        code: Some(tower_lsp::lsp_types::NumberOrString::String(code.to_string())),
-        code_description: None,
-        source: Some("lex".to_string()),
-        message: diag.message,
-        related_information: None,
-        tags: None,
-        data: None,
     }
 }

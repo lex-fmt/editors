@@ -166,7 +166,11 @@ fn asset_path_completions(workspace: Option<&CompletionWorkspace>) -> Vec<Comple
         .collect()
 }
 
-fn detect_context(document: &Document, position: Position, current_line: Option<&str>) -> CompletionContext {
+fn detect_context(
+    document: &Document,
+    position: Position,
+    current_line: Option<&str>,
+) -> CompletionContext {
     if is_inside_verbatim_label(document, position) {
         return CompletionContext::VerbatimLabel;
     }
@@ -185,7 +189,11 @@ fn detect_context(document: &Document, position: Position, current_line: Option<
     CompletionContext::General
 }
 
-fn is_at_potential_verbatim_start(_document: &Document, _position: Position, current_line: Option<&str>) -> bool {
+fn is_at_potential_verbatim_start(
+    _document: &Document,
+    _position: Position,
+    current_line: Option<&str>,
+) -> bool {
     // If we have the raw text line, check if it starts with "::"
     if let Some(text) = current_line {
         let trimmed = text.trim();
@@ -194,7 +202,7 @@ fn is_at_potential_verbatim_start(_document: &Document, _position: Position, cur
         }
         // Support e.g. ":: "
         if trimmed.starts_with("::") && trimmed.len() <= 3 {
-             return true;
+            return true;
         }
     }
     // Fallback detection via AST is intentionally removed as AST is unreliable for incomplete blocks
@@ -670,7 +678,8 @@ Code sample:
             document_path,
         };
 
-        let completions = completion_items(&document, position_at(cursor), None, Some(&workspace), None);
+        let completions =
+            completion_items(&document, position_at(cursor), None, Some(&workspace), None);
 
         let candidate = completions
             .iter()
@@ -727,7 +736,8 @@ Code sample:
         };
 
         // With @ trigger, should return only file paths (no annotation labels, etc.)
-        let completions = completion_items(&document, position_at(0), None, Some(&workspace), Some("@"));
+        let completions =
+            completion_items(&document, position_at(0), None, Some(&workspace), Some("@"));
 
         // Should have file paths
         assert!(completions
@@ -742,7 +752,6 @@ Code sample:
 
     #[test]
     fn macro_completions_suggested_on_at() {
-        let document = parsing::parse_sample(); // Wait, parse_sample is local
         let document = parse_sample();
         let temp = tempdir().expect("temp dir");
         let root = temp.path();
@@ -753,7 +762,8 @@ Code sample:
             document_path,
         };
 
-        let completions = completion_items(&document, position_at(0), None, Some(&workspace), Some("@"));
+        let completions =
+            completion_items(&document, position_at(0), None, Some(&workspace), Some("@"));
         assert!(completions.iter().any(|c| c.label == "@table"));
         assert!(completions.iter().any(|c| c.label == "@note"));
         assert!(completions.iter().any(|c| c.label == "@image"));
@@ -766,22 +776,22 @@ Code sample:
         println!("AST: {:#?}", document);
         // Cursor at col 2 (after "::")
         let pos = Position::new(0, 2);
-        
+
         // Pass "::" as current line content
         let completions = completion_items(&document, pos, Some("::"), None, Some(":"));
-        
+
         assert!(completions.iter().any(|c| c.label == "doc.code"));
         assert!(completions.iter().any(|c| c.label == "rust"));
     }
 
     #[test]
     fn trigger_at_suggests_macros() {
-         let text = "";
+        let text = "";
         let document = parsing::parse_document(text).expect("parses");
         let pos = Position::new(0, 0);
         let completions = completion_items(&document, pos, None, None, Some("@"));
-        
+
         assert!(completions.iter().any(|c| c.label == "@table"));
-         assert!(completions.iter().any(|c| c.label == "@note"));
+        assert!(completions.iter().any(|c| c.label == "@note"));
     }
 }
