@@ -132,7 +132,9 @@ fn get_dictionary(language: &str) -> DictionaryStatus {
                     let global_custom_path = data_dir.join("dictionaries").join("custom.dic");
                     // Avoid double loading if base_path IS the data dir
                     if global_custom_path.exists() && global_custom_path != custom_path {
-                        eprintln!("[Spellcheck] Found global custom dictionary at {global_custom_path:?}");
+                        eprintln!(
+                            "[Spellcheck] Found global custom dictionary at {global_custom_path:?}"
+                        );
                         if let Ok(custom_words) = std::fs::read_to_string(&global_custom_path) {
                             dic_content.push('\n');
                             dic_content.push_str(&custom_words);

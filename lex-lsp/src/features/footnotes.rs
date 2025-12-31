@@ -1,9 +1,7 @@
-use lex_core::lex::ast::{
-    ContentItem, Document, Range, Session, TextContent,
-};
-use lex_core::lex::inlines::ReferenceType;
 use lex_analysis::inline::{extract_inline_spans, InlineSpanKind};
 use lex_analysis::utils::collect_all_annotations;
+use lex_core::lex::ast::{ContentItem, Document, Range, Session, TextContent};
+use lex_core::lex::inlines::ReferenceType;
 use std::collections::HashMap;
 
 /// Reorders footnotes in the document to be sequential (1, 2, 3...) based on appearance.
@@ -69,11 +67,14 @@ pub fn reorder_footnotes(document: &Document, source: &str) -> String {
     let offsets = line_offsets(source);
 
     // Convert Range to (start_byte, end_byte, kind)
-    let mut byte_edits: Vec<(usize, usize, ReplacementKind)> = edits.iter().map(|(range, kind)| {
-         let start = pos_to_byte(&offsets, range.start);
-         let end = pos_to_byte(&offsets, range.end);
-         (start, end, *kind)
-    }).collect();
+    let mut byte_edits: Vec<(usize, usize, ReplacementKind)> = edits
+        .iter()
+        .map(|(range, kind)| {
+            let start = pos_to_byte(&offsets, range.start);
+            let end = pos_to_byte(&offsets, range.end);
+            (start, end, *kind)
+        })
+        .collect();
 
     // Sort by start desc
     // Note: If ranges overlap, this handling is naive. But references/definitions shouldn't overlap.
@@ -82,18 +83,28 @@ pub fn reorder_footnotes(document: &Document, source: &str) -> String {
     let mut new_source = source.to_string();
     for (start, end, kind) in byte_edits {
         if start <= end && end <= new_source.len() {
-             let original = &new_source[start..end];
-             let replacement = match kind {
-                 ReplacementKind::Reference(n) => n.to_string(),
-                 ReplacementKind::Definition(n) => {
-                     // Preserve padding
-                     let leading_space = original.chars().take_while(|c| c.is_whitespace()).collect::<String>();
-                     let trailing_space = original.chars().rev().take_while(|c| c.is_whitespace()).collect::<String>().chars().rev().collect::<String>();
-                     format!("{}{}{}", leading_space, n, trailing_space)
-                 }
-             };
-             
-             new_source.replace_range(start..end, &replacement);
+            let original = &new_source[start..end];
+            let replacement = match kind {
+                ReplacementKind::Reference(n) => n.to_string(),
+                ReplacementKind::Definition(n) => {
+                    // Preserve padding
+                    let leading_space = original
+                        .chars()
+                        .take_while(|c| c.is_whitespace())
+                        .collect::<String>();
+                    let trailing_space = original
+                        .chars()
+                        .rev()
+                        .take_while(|c| c.is_whitespace())
+                        .collect::<String>()
+                        .chars()
+                        .rev()
+                        .collect::<String>();
+                    format!("{}{}{}", leading_space, n, trailing_space)
+                }
+            };
+
+            new_source.replace_range(start..end, &replacement);
         }
     }
 
@@ -103,16 +114,18 @@ pub fn reorder_footnotes(document: &Document, source: &str) -> String {
 fn line_offsets(source: &str) -> Vec<usize> {
     let mut offsets = vec![0];
     for (i, ch) in source.char_indices() {
-         if ch == '\n' {
-             offsets.push(i + 1);
-         }
+        if ch == '\n' {
+            offsets.push(i + 1);
+        }
     }
     offsets
 }
 
 fn pos_to_byte(offsets: &[usize], pos: lex_core::lex::ast::Position) -> usize {
     let line_idx = pos.line as usize;
-    let line_start = *offsets.get(line_idx).unwrap_or(offsets.last().unwrap_or(&0));
+    let line_start = *offsets
+        .get(line_idx)
+        .unwrap_or(offsets.last().unwrap_or(&0));
     // As observed in server.rs, column seems to be byte offset from line start
     line_start + pos.column as usize
 }
@@ -180,10 +193,10 @@ mod tests {
         let doc = parsing::parse_document(source).unwrap();
         println!("AST: {:#?}", doc);
         let new_source = reorder_footnotes(&doc, source);
-        
+
         // Expected: First ref [2] becomes [1]. Second ref [1] becomes [2].
         // Definitions: :: 2 :: -> :: 1 ::, :: 1 :: -> :: 2 ::.
-        
+
         let expected = "Ref [1] and [2].\n\n:: 2 ::\nNote 1.\n::\n\n:: 1 ::\nNote 2.\n::\n";
         assert_eq!(new_source, expected);
     }
@@ -195,10 +208,10 @@ mod tests {
         // 5 appears second -> becomes 2.
         // :: 5 :: -> :: 2 ::
         // :: 10 :: doesn't exist, so no def update for 10.
-        
+
         let doc = parsing::parse_document(source).unwrap();
         let new_source = reorder_footnotes(&doc, source);
-        
+
         let expected = "Ref [1] then [1] then [2].\n\n:: 2 ::\nContent.\n::";
         assert_eq!(new_source, expected);
     }

@@ -1,7 +1,7 @@
-use lex_core::lex::ast::{Document, Range};
-use lex_core::lex::inlines::ReferenceType;
 use crate::inline::{extract_inline_spans, InlineSpanKind};
 use crate::utils::{collect_all_annotations, for_each_text_content};
+use lex_core::lex::ast::{Document, Range};
+use lex_core::lex::inlines::ReferenceType;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DiagnosticKind {
@@ -29,11 +29,13 @@ fn check_footnotes(document: &Document, diagnostics: &mut Vec<AnalysisDiagnostic
         for span in extract_inline_spans(text) {
             if let InlineSpanKind::Reference(ReferenceType::FootnoteNumber { number }) = span.kind {
                 references.push((number, span.range));
-            } else if let InlineSpanKind::Reference(ReferenceType::FootnoteLabeled { label: _ }) = span.kind {
+            } else if let InlineSpanKind::Reference(ReferenceType::FootnoteLabeled { label: _ }) =
+                span.kind
+            {
                 // We handle numeric footnotes primarily as per request, but let's track labels too if needed.
                 // For now, the user specifically mentioned numeric reordering and validation.
                 // Let's stick to numeric for the specific "footnote" validation if the user context implies it.
-                // Actually, the user said "add diagnotics for mismatched footnotes". 
+                // Actually, the user said "add diagnotics for mismatched footnotes".
                 // Let's handle both if possible, but the renumbering task implies numeric.
             }
         }
@@ -48,14 +50,14 @@ fn check_footnotes(document: &Document, diagnostics: &mut Vec<AnalysisDiagnostic
     // The user said: "add completion for footnotes refernce [<integer]... then create the respective note item at the end".
     // And "re-order the number for the footnote itself".
     // This implies the definition is likely an annotation with a numeric label, e.g. `:: 1 ::`.
-    
+
     let annotations = collect_all_annotations(document);
     let mut definitions = std::collections::HashMap::new();
-    
+
     for annotation in &annotations {
         let label = &annotation.data.label.value;
         if let Ok(number) = label.parse::<u32>() {
-             definitions.insert(number, annotation);
+            definitions.insert(number, annotation);
         }
     }
 
@@ -71,7 +73,7 @@ fn check_footnotes(document: &Document, diagnostics: &mut Vec<AnalysisDiagnostic
     }
 
     // 4. Check for unused definitions
-    // The user said "footnotes without refs are ok", but let's see. 
+    // The user said "footnotes without refs are ok", but let's see.
     // "add diagnotics for mismatched footnotes (both a ref that has no footnote content , footnotes without refs are ok...)"
     // Wait, "footnotes without refs are ok". So I should NOT warn on unused definitions.
     // "both a ref that has no footnote content , footnotes without refs are ok"
@@ -80,9 +82,9 @@ fn check_footnotes(document: &Document, diagnostics: &mut Vec<AnalysisDiagnostic
     // "mismatched footnotes (both a ref that has no footnote content...)" -> Ref exists, Def missing.
     // "...footnotes without refs are ok" -> Def exists, Ref missing is OK.
     // So ONLY Ref -> Missing Def is an error.
-    
+
     // However, usually "mismatched" implies both directions.
-    // If the user explicitly said "footnotes without refs are ok", I will respect that. 
+    // If the user explicitly said "footnotes without refs are ok", I will respect that.
     // I will implementation missing definition check.
 }
 
