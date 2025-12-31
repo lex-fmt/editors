@@ -12,53 +12,49 @@ pub fn compute_actions(
     // 1. Diagnostic-based actions
     for diagnostic in &params.context.diagnostics {
         if let Some(tower_lsp::lsp_types::NumberOrString::String(code)) = &diagnostic.code {
-            match code.as_str() {
-                "missing-footnote" => {
-                    // QuickFix: Add footnote definition
-                    if let Some(label) = parse_label_from_message(&diagnostic.message) {
-                        let line_count = source.lines().count().max(1) as u32;
+            if code.as_str() == "missing-footnote" {
+                // QuickFix: Add footnote definition
+                if let Some(label) = parse_label_from_message(&diagnostic.message) {
+                    let line_count = source.lines().count().max(1) as u32;
 
-                        let _action = CodeAction {
-                            title: format!("Add definition for footnote [{}]", label),
-                            kind: Some(CodeActionKind::QUICKFIX),
-                            diagnostics: Some(vec![diagnostic.clone()]),
-                            edit: Some(WorkspaceEdit {
-                                changes: Some(HashMap::from([(
-                                    params.text_document.uri.clone(),
-                                    vec![TextEdit {
-                                        range: tower_lsp::lsp_types::Range {
-                                            start: tower_lsp::lsp_types::Position {
-                                                line: line_count,
-                                                character: 0,
-                                            },
-                                            end: tower_lsp::lsp_types::Position {
-                                                line: line_count,
-                                                character: 0,
-                                            },
+                    let _action = CodeAction {
+                        title: format!("Add definition for footnote [{}]", label),
+                        kind: Some(CodeActionKind::QUICKFIX),
+                        diagnostics: Some(vec![diagnostic.clone()]),
+                        edit: Some(WorkspaceEdit {
+                            changes: Some(HashMap::from([(
+                                params.text_document.uri.clone(),
+                                vec![TextEdit {
+                                    range: tower_lsp::lsp_types::Range {
+                                        start: tower_lsp::lsp_types::Position {
+                                            line: line_count,
+                                            character: 0,
                                         },
-                                        new_text: format!("\n\n:: {} ::\n\n", label),
-                                    }],
-                                )])),
-                                ..Default::default()
-                            }),
-                            command: None,
-                            is_preferred: Some(true),
-                            disabled: None,
-                            data: None,
-                        };
-                        // actions.push(_action); // Uncomment to enable
-                    }
+                                        end: tower_lsp::lsp_types::Position {
+                                            line: line_count,
+                                            character: 0,
+                                        },
+                                    },
+                                    new_text: format!("\n\n:: {} ::\n\n", label),
+                                }],
+                            )])),
+                            ..Default::default()
+                        }),
+                        command: None,
+                        is_preferred: Some(true),
+                        disabled: None,
+                        data: None,
+                    };
+                    // actions.push(_action); // Uncomment to enable
                 }
-                _ => {}
             }
         }
     }
 
     // 2. Global actions (Refactor)
     let requested_kind = params.context.only.as_ref().and_then(|k| k.first());
-    let wants_refactor = requested_kind.map_or(true, |k| {
-        k.as_str().starts_with("source") || k.as_str().starts_with("refactor")
-    });
+    let wants_refactor = requested_kind
+        .is_none_or(|k| k.as_str().starts_with("source") || k.as_str().starts_with("refactor"));
 
     if wants_refactor {
         // Compute reordered content
