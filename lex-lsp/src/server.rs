@@ -16,6 +16,7 @@ use crate::features::semantic_tokens::{
     collect_semantic_tokens, LexSemanticToken, SEMANTIC_TOKEN_KINDS,
 };
 use crate::features::spellcheck::SpellcheckResult;
+use lex_analysis::diagnostics::{analyze as analyze_diagnostics, AnalysisDiagnostic, DiagnosticKind};
 use lex_analysis::completion::{completion_items, CompletionCandidate, CompletionWorkspace};
 use lex_babel::formats::lex::formatting_rules::FormattingRules;
 use lex_babel::templates::{
@@ -306,26 +307,29 @@ where
 
     async fn parse_and_store(&self, uri: Url, text: String) {
         if let Some(entry) = self.documents.upsert(uri.clone(), text).await {
-            // Run spellcheck if enabled
+            // Run analysis diagnostics
+            let analysis_diags = analyze_diagnostics(&entry.document);
+            
+            // Combine diagnostics
+            let mut all_diagnostics = Vec::new();
+            
             let config = self.config.read().await;
             if config.spellcheck.enabled {
-                let spell_result = self
+                 let spell_result = self
                     .features
                     .check_spelling(&entry.document, &config.spellcheck.language);
-
-                if let Some(error) = spell_result.error {
+                 if let Some(error) = spell_result.error {
                     self._client.show_message(MessageType::WARNING, error).await;
-                }
-
-                let diagnostics = spell_result.diagnostics;
-
-                self._client
-                    .publish_diagnostics(uri, diagnostics, None)
-                    .await;
-            } else {
-                // Clear diagnostics if disabled
-                self._client.publish_diagnostics(uri, vec![], None).await;
+                 }
+                 all_diagnostics.extend(spell_result.diagnostics);
             }
+            
+            // Convert analysis diagnostics to LSP diagnostics
+            for diag in analysis_diags {
+                all_diagnostics.push(to_lsp_diagnostic(diag));
+            }
+
+            self._client.publish_diagnostics(uri, all_diagnostics, None).await;
         }
     }
 
@@ -756,6 +760,7 @@ where
                     commands::COMMAND_INSERT_ASSET.to_string(),
                     commands::COMMAND_INSERT_VERBATIM.to_string(),
                     commands::COMMAND_ADD_TO_DICTIONARY.to_string(),
+                    commands::COMMAND_FOOTNOTES_REORDER.to_string(),
                 ],
                 work_done_progress_options: WorkDoneProgressOptions::default(),
             }),
@@ -1994,5 +1999,24 @@ mod tests {
         assert_eq!(rules.max_blank_lines, 3);
         assert!(!rules.normalize_seq_markers);
         assert_eq!(rules.unordered_seq_marker, '*');
+    }
+}
+
+fn to_lsp_diagnostic(diag: AnalysisDiagnostic) -> Diagnostic {
+    let severity = match diag.kind {
+        DiagnosticKind::MissingFootnoteDefinition => tower_lsp::lsp_types::DiagnosticSeverity::ERROR,
+        DiagnosticKind::UnusedFootnoteDefinition => tower_lsp::lsp_types::DiagnosticSeverity::WARNING,
+    };
+    
+    Diagnostic {
+        range: to_lsp_range(&diag.range),
+        severity: Some(severity),
+        code: None,
+        code_description: None,
+        source: Some("lex".to_string()),
+        message: diag.message,
+        related_information: None,
+        tags: None,
+        data: None,
     }
 }

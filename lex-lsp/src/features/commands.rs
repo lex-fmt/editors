@@ -16,6 +16,7 @@ pub const COMMAND_TOGGLE_ANNOTATIONS: &str = "lex.toggle_annotations";
 pub const COMMAND_INSERT_ASSET: &str = "lex.insert_asset";
 pub const COMMAND_INSERT_VERBATIM: &str = "lex.insert_verbatim";
 pub const COMMAND_ADD_TO_DICTIONARY: &str = "lex.spellcheck.addToDictionary";
+pub const COMMAND_FOOTNOTES_REORDER: &str = "lex.footnotes.reorder";
 
 pub fn execute_command(command: &str, arguments: &[Value]) -> Result<Option<Value>> {
     match command {
@@ -104,6 +105,21 @@ pub fn execute_command(command: &str, arguments: &[Value]) -> Result<Option<Valu
 
             crate::features::spellcheck::add_to_dictionary(word, language);
             Ok(None)
+        }
+        COMMAND_FOOTNOTES_REORDER => {
+            let content = arguments
+                .first()
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| Error::invalid_params("Missing 'content' argument"))?;
+
+            // Parse document
+            let doc = lex_core::lex::parsing::parse_document(content)
+                .map_err(|_| Error::invalid_params("Failed to parse document"))?;
+
+            // Reorder
+            let new_content = crate::features::footnotes::reorder_footnotes(&doc, content);
+
+            Ok(Some(Value::String(new_content)))
         }
         _ => Err(Error::invalid_request()),
     }
