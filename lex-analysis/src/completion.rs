@@ -752,7 +752,6 @@ Code sample:
 
     #[test]
     fn macro_completions_suggested_on_at() {
-        let document = parsing::parse_sample(); // Wait, parse_sample is local
         let document = parse_sample();
         let temp = tempdir().expect("temp dir");
         let root = temp.path();
