@@ -9,6 +9,7 @@ on:
   push:
     tags:
       - 'v*'
+      - 'lex-lsp-v*'
 
 jobs:
   build:
