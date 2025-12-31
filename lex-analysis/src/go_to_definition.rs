@@ -38,8 +38,26 @@ fn resolve_targets(document: &Document, targets: &[ReferenceTarget]) -> Vec<Rang
     for target in targets {
         match target {
             ReferenceTarget::AnnotationLabel(label) => {
+                // Find matching annotations
                 for annotation in document.find_annotations_by_label(label) {
                     ranges.push(annotation.header_location().clone());
+                }
+                
+                // Find matching list items in Notes session
+                if let Some(notes_session) = crate::utils::find_notes_session(document) {
+                    for item in &notes_session.children {
+                        if let lex_core::lex::ast::ContentItem::List(l) = item {
+                            for entry in &l.items {
+                                if let lex_core::lex::ast::ContentItem::ListItem(li) = entry {
+                                    let marker = li.marker();
+                                    let item_label = marker.trim().trim_end_matches(['.', ')', ':'].as_ref()).trim();
+                                    if item_label == label {
+                                        ranges.push(li.range().clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             ReferenceTarget::CitationKey(key) => {
