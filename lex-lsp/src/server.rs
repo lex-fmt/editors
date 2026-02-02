@@ -15,7 +15,7 @@ use crate::features::references::find_references;
 use crate::features::semantic_tokens::{
     collect_semantic_tokens, LexSemanticToken, SEMANTIC_TOKEN_KINDS,
 };
-use crate::features::spellcheck::SpellcheckResult;
+use crate::features::spellcheck::LspSpellcheckResult;
 use lex_analysis::completion::{completion_items, CompletionCandidate, CompletionWorkspace};
 use lex_analysis::diagnostics::{
     analyze as analyze_diagnostics, AnalysisDiagnostic, DiagnosticKind,
@@ -104,7 +104,7 @@ pub trait FeatureProvider: Send + Sync + 'static {
         trigger_char: Option<&str>,
     ) -> Vec<CompletionCandidate>;
     fn execute_command(&self, command: &str, arguments: &[Value]) -> Result<Option<Value>>;
-    fn check_spelling(&self, document: &Document, language: &str) -> SpellcheckResult;
+    fn check_spelling(&self, document: &Document, language: &str) -> LspSpellcheckResult;
 }
 
 #[derive(Default)]
@@ -185,7 +185,7 @@ impl FeatureProvider for DefaultFeatureProvider {
         execute_command(command, arguments)
     }
 
-    fn check_spelling(&self, document: &Document, language: &str) -> SpellcheckResult {
+    fn check_spelling(&self, document: &Document, language: &str) -> LspSpellcheckResult {
         crate::features::spellcheck::check_document(document, language)
     }
 }
@@ -1520,8 +1520,8 @@ mod tests {
             }
         }
 
-        fn check_spelling(&self, _: &Document, _: &str) -> SpellcheckResult {
-            SpellcheckResult {
+        fn check_spelling(&self, _: &Document, _: &str) -> LspSpellcheckResult {
+            LspSpellcheckResult {
                 diagnostics: Vec::new(),
                 error: None,
                 misspelled_count: 0,

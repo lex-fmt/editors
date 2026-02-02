@@ -57,6 +57,7 @@ pub mod go_to_definition;
 pub mod hover;
 pub mod references;
 pub mod semantic_tokens;
+pub mod spellcheck;
 
 // Test support (available in tests and as dev-dependency)
 #[cfg(any(test, feature = "test-support"))]

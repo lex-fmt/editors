@@ -11,6 +11,9 @@
 //! - **Persistent**: Custom words added by the user are saved to a standard user data directory.
 //! - **LSP-Native**: Reports misspellings as standard `Diagnostics`.
 //!
+//! This module implements a filesystem-based `DictionaryProvider` that wraps the
+//! `spellbook` crate. The core checking logic lives in `lex_analysis::spellcheck`.
+//!
 //! ### Dictionary Management
 //!
 //! Dictionaries are managed via the `spellbook` crate. We use a global `DICTIONARIES` cache
@@ -42,19 +45,17 @@
 //! the actual user's configuration.
 
 use directories::ProjectDirs;
-use lex_core::lex::ast::elements::{ContentItem, Document, TextLine};
-use lex_core::lex::ast::{AstNode, Container}; // Import AstNode for range()
+use lex_analysis::spellcheck::{self, SpellcheckResult, WordChecker};
+use lex_core::lex::ast::elements::Document;
 use spellbook::Dictionary;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
-use tower_lsp::lsp_types::{
-    Diagnostic, DiagnosticSeverity, Position as LspPosition, Range as LspRange,
-};
+use tower_lsp::lsp_types::Diagnostic;
 
-static DICTIONARIES: OnceLock<Mutex<HashMap<String, Arc<Dictionary>>>> = OnceLock::new();
+static DICTIONARIES: OnceLock<Mutex<HashMap<String, Arc<SpellbookChecker>>>> = OnceLock::new();
 
-fn get_dictionaries() -> &'static Mutex<HashMap<String, Arc<Dictionary>>> {
+fn get_dictionaries() -> &'static Mutex<HashMap<String, Arc<SpellbookChecker>>> {
     DICTIONARIES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -65,8 +66,32 @@ fn get_data_dir() -> Option<PathBuf> {
     ProjectDirs::from("org", "lex", "lex-lsp").map(|proj| proj.data_dir().to_path_buf())
 }
 
+/// Wrapper around spellbook::Dictionary that implements WordChecker.
+pub struct SpellbookChecker {
+    dictionary: Dictionary,
+}
+
+impl SpellbookChecker {
+    pub fn new(dictionary: Dictionary) -> Self {
+        Self { dictionary }
+    }
+}
+
+impl WordChecker for SpellbookChecker {
+    fn check(&self, word: &str) -> bool {
+        self.dictionary.check(word)
+    }
+
+    fn suggest(&self, word: &str, limit: usize) -> Vec<String> {
+        let mut suggestions = Vec::new();
+        self.dictionary.suggest(word, &mut suggestions);
+        suggestions.truncate(limit);
+        suggestions
+    }
+}
+
 pub enum DictionaryStatus {
-    Loaded(Arc<Dictionary>),
+    Loaded(Arc<SpellbookChecker>),
     Missing,
     FailedToLoad,
 }
@@ -74,9 +99,9 @@ pub enum DictionaryStatus {
 fn get_dictionary(language: &str) -> DictionaryStatus {
     eprintln!("[Spellcheck] get_dictionary called for language: {language}");
     let mut cache = get_dictionaries().lock().unwrap();
-    if let Some(dict) = cache.get(language) {
+    if let Some(checker) = cache.get(language) {
         eprintln!("[Spellcheck] Returning cached dictionary for {language}");
-        return DictionaryStatus::Loaded(dict.clone());
+        return DictionaryStatus::Loaded(checker.clone());
     }
 
     // Try to load from "dictionaries" folder in CWD or adjacent to executable
@@ -144,9 +169,9 @@ fn get_dictionary(language: &str) -> DictionaryStatus {
 
                 if let Ok(dict) = Dictionary::new(&aff, &dic_content) {
                     eprintln!("[Spellcheck] Successfully loaded dictionary for {language}");
-                    let dict = Arc::new(dict);
-                    cache.insert(language.to_string(), dict.clone());
-                    return DictionaryStatus::Loaded(dict);
+                    let checker = Arc::new(SpellbookChecker::new(dict));
+                    cache.insert(language.to_string(), checker.clone());
+                    return DictionaryStatus::Loaded(checker);
                 } else {
                     eprintln!("[Spellcheck] Failed to parse dictionary for {language}");
                     return DictionaryStatus::FailedToLoad;
@@ -163,19 +188,20 @@ fn get_dictionary(language: &str) -> DictionaryStatus {
     DictionaryStatus::Missing
 }
 
-pub struct SpellcheckResult {
+/// Result wrapper that includes error information from dictionary loading.
+pub struct LspSpellcheckResult {
     pub diagnostics: Vec<Diagnostic>,
     pub error: Option<String>,
     pub misspelled_count: usize,
 }
 
-pub fn check_document(document: &Document, language: &str) -> SpellcheckResult {
+pub fn check_document(document: &Document, language: &str) -> LspSpellcheckResult {
     let dict_status = get_dictionary(language);
 
-    let dict = match dict_status {
-        DictionaryStatus::Loaded(d) => d,
+    let checker = match dict_status {
+        DictionaryStatus::Loaded(c) => c,
         DictionaryStatus::Missing => {
-            return SpellcheckResult {
+            return LspSpellcheckResult {
                 diagnostics: vec![],
                 error: Some(format!(
                     "Dictionary for language '{language}' not found. Spellchecking disabled."
@@ -184,7 +210,7 @@ pub fn check_document(document: &Document, language: &str) -> SpellcheckResult {
             };
         }
         DictionaryStatus::FailedToLoad => {
-            return SpellcheckResult {
+            return LspSpellcheckResult {
                 diagnostics: vec![],
                 error: Some(format!(
                     "Failed to load dictionary for language '{language}'. The file might be corrupted or invalid."
@@ -194,104 +220,23 @@ pub fn check_document(document: &Document, language: &str) -> SpellcheckResult {
         }
     };
 
-    let mut diagnostics = Vec::new();
-    traverse_session(&document.root, &dict, &mut diagnostics);
+    let SpellcheckResult {
+        diagnostics,
+        misspelled_count,
+    } = spellcheck::check_document(document, checker.as_ref());
 
-    let count = diagnostics.len();
-    eprintln!("[Spellcheck] Document checked. Misspelled words: {count}");
+    eprintln!("[Spellcheck] Document checked. Misspelled words: {misspelled_count}");
 
-    SpellcheckResult {
+    LspSpellcheckResult {
         diagnostics,
         error: None,
-        misspelled_count: count,
-    }
-}
-
-fn traverse_content_item(item: &ContentItem, dict: &Dictionary, diagnostics: &mut Vec<Diagnostic>) {
-    match item {
-        ContentItem::Paragraph(para) => {
-            for line_item in &para.lines {
-                if let ContentItem::TextLine(tl) = line_item {
-                    check_text_line(tl, dict, diagnostics);
-                }
-            }
-        }
-        ContentItem::Session(session) => traverse_session(session, dict, diagnostics),
-        ContentItem::TextLine(tl) => check_text_line(tl, dict, diagnostics),
-        _ => {
-            // Generic traversal for other containers
-            if let Some(children) = item.children() {
-                for child in children {
-                    traverse_content_item(child, dict, diagnostics);
-                }
-            }
-        }
-    }
-}
-
-fn traverse_session(
-    session: &lex_core::lex::ast::elements::Session,
-    dict: &Dictionary,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    for child in session.children() {
-        traverse_content_item(child, dict, diagnostics);
-    }
-}
-
-fn check_text_line(line: &TextLine, dict: &Dictionary, diagnostics: &mut Vec<Diagnostic>) {
-    let text = line.text();
-    let range = line.range();
-
-    let mut current_offset = 0;
-    for word in text.split_whitespace() {
-        if let Some(index) = text[current_offset..].find(word) {
-            let start_offset = current_offset + index;
-            // Strip punctuation
-            let clean_word = word.trim_matches(|c: char| !c.is_alphabetic());
-            if !clean_word.is_empty() {
-                let is_correct = dict.check(clean_word);
-                if !is_correct {
-                    // Calculate LSP range
-                    // TextLine is always single line.
-                    let start_char = range.start.column + start_offset;
-                    let end_char = start_char + word.len();
-
-                    diagnostics.push(Diagnostic {
-                        range: LspRange {
-                            start: LspPosition {
-                                line: range.start.line as u32,
-                                character: start_char as u32,
-                            },
-                            end: LspPosition {
-                                line: range.end.line as u32,
-                                character: end_char as u32,
-                            },
-                        },
-                        severity: Some(DiagnosticSeverity::INFORMATION),
-                        code: Some(tower_lsp::lsp_types::NumberOrString::String(
-                            "spelling".to_string(),
-                        )),
-                        code_description: None,
-                        source: Some("lex-spell".to_string()),
-                        message: format!("Unknown word: {clean_word}"),
-                        related_information: None,
-                        tags: None,
-                        data: None,
-                    });
-                }
-            }
-            current_offset = start_offset + word.len();
-        }
+        misspelled_count,
     }
 }
 
 pub fn suggest_corrections(word: &str, language: &str) -> Vec<String> {
-    if let DictionaryStatus::Loaded(dict) = get_dictionary(language) {
-        let mut suggestions = Vec::new();
-        dict.suggest(word, &mut suggestions);
-        suggestions.truncate(4);
-        return suggestions;
+    if let DictionaryStatus::Loaded(checker) = get_dictionary(language) {
+        return spellcheck::suggest_corrections(word, checker.as_ref(), 4);
     }
     vec![]
 }
@@ -334,20 +279,20 @@ pub fn add_to_dictionary(word: &str, language: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lex_core::lex::ast::elements::{Paragraph, Session};
-    use lex_core::lex::ast::Container;
-    use lex_core::lex::ast::{Position, Range};
+    use lex_core::lex::ast::elements::{ContentItem, Paragraph, Session};
+    use lex_core::lex::ast::{Container, Position, Range};
 
     #[test]
     fn test_check_text() {
         let aff = "SET UTF-8\nTRY esianrtolcdugmphbyfvkwzESIANRTOLCDUGMPHBYFVKWZ'";
         let dic = "1\nhello";
 
-        let dict = Arc::new(Dictionary::new(aff, dic).unwrap());
+        let dict = Dictionary::new(aff, dic).unwrap();
+        let checker = Arc::new(SpellbookChecker::new(dict));
 
         {
             let mut cache = get_dictionaries().lock().unwrap();
-            cache.insert("test".to_string(), dict);
+            cache.insert("test".to_string(), checker);
         }
 
         let range = Range::new(0..11, Position::new(0, 0), Position::new(0, 11));
@@ -373,11 +318,12 @@ mod tests {
     fn test_suggest() {
         let aff = "SET UTF-8\nTRY esianrtolcdugmphbyfvkwzESIANRTOLCDUGMPHBYFVKWZ'\nREP 1\nREP o 0";
         let dic = "1\nhello";
-        let dict = Arc::new(Dictionary::new(aff, dic).unwrap());
+        let dict = Dictionary::new(aff, dic).unwrap();
+        let checker = Arc::new(SpellbookChecker::new(dict));
 
         {
             let mut cache = get_dictionaries().lock().unwrap();
-            cache.insert("test_suggest".to_string(), dict);
+            cache.insert("test_suggest".to_string(), checker);
         }
 
         let _suggestions = suggest_corrections("helo", "test_suggest");
