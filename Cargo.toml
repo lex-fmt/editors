@@ -2,6 +2,7 @@
 members = [
     "lex-analysis",
     "lex-lsp",
+    "lex-wasm",
 ]
 resolver = "2"
 
