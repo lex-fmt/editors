@@ -11,8 +11,17 @@ The core logic is centralized in the Rust-based **LSP (Language Server)** to ens
 - **`lex-lsp`**: The Language Server. Built with Rust.
 - **`lex-analysis`**: Shared semantic analysis logic (used by LSP).
 - **`vscode`**: VSCode extension.
-- **`lexed`**: Standalone Electron/Monaco editor.
+- **`lexed`**: Multi-platform editor with shared React/Monaco UI. Runs on Electron desktop (with native LSP) and browser (with WASM LSP). Uses platform abstraction layer.
 - **`nvim`**: Neovim configuration/plugin.
+
+## Multi-Platform Editor (Lexed)
+
+The Lexed editor is designed to run on both Electron desktop and web browser platforms with shared UI code. This is achieved through a `PlatformAdapter` abstraction:
+
+- **Electron**: Uses IPC for file system, native dialogs, and communicates with spawned `lex-lsp` process
+- **Web**: Uses browser APIs (File System Access, localStorage) and WASM-compiled `lex-wasm` module
+
+Components use `usePlatform()` hook to access platform capabilities, enabling the same React/Monaco code to work on both platforms. See `lexed/shared/src/platform.ts` for the interface definition.
 
 ## Feature Implementation Flow
 
