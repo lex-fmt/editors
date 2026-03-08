@@ -129,10 +129,10 @@ fn macro_completions(_document: &Document) -> Vec<CompletionCandidate> {
     vec![
         CompletionCandidate::new("@table", CompletionItemKind::SNIPPET)
             .with_detail("Insert table snippet")
-            .with_insert_text(":: doc.table\n| Header 1 | Header 2 |\n| -------- | -------- |\n| Cell 1   | Cell 2   |\n::\n"),
+            .with_insert_text(":: doc.table ::\n| Header 1 | Header 2 |\n| -------- | -------- |\n| Cell 1   | Cell 2   |\n::\n"),
         CompletionCandidate::new("@image", CompletionItemKind::SNIPPET)
             .with_detail("Insert image snippet")
-            .with_insert_text(":: doc.image src=\"$1\"\n"),
+            .with_insert_text(":: doc.image src=\"$1\" ::\n"),
         CompletionCandidate::new("@note", CompletionItemKind::SNIPPET)
             .with_detail("Insert note reference")
             .with_insert_text("[^$1]"),
