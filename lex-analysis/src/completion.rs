@@ -594,12 +594,12 @@ Cache:
 Image placeholder:
 
     diagram placeholder
-:: doc.image src=./images/chart.png title="Usage"
+:: doc.image src=./images/chart.png title="Usage" ::
 
 Code sample:
 
     fn main() {}
-:: rust
+:: rust ::
 "#;
 
     fn parse_sample() -> Document {

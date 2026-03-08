@@ -859,7 +859,7 @@ name = "lex-analysis"
 version = "0.2.7"
 dependencies = [
  "ignore",
- "lex-core",
+ "lex-core 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lsp-types",
  "pathdiff",
  "tempfile",
@@ -871,7 +871,7 @@ version = "0.2.6"
 dependencies = [
  "comrak",
  "html5ever",
- "lex-core",
+ "lex-core 0.2.2",
  "markup5ever_rcdom",
  "pathdiff",
  "roxmltree",
@@ -887,13 +887,26 @@ checksum = "f08354dda253d06263fd82334c7e7f081753241ed9c3b1418a5d65b00731d8c0"
 dependencies = [
  "comrak",
  "html5ever",
- "lex-core",
+ "lex-core 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "markup5ever_rcdom",
  "pathdiff",
  "serde",
  "tempfile",
  "url",
  "which",
+]
+
+[[package]]
+name = "lex-core"
+version = "0.2.2"
+dependencies = [
+ "logos",
+ "once_cell",
+ "polymath-rs",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml",
 ]
 
 [[package]]
@@ -918,7 +931,7 @@ dependencies = [
  "directories",
  "lex-analysis",
  "lex-babel 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "lex-core",
+ "lex-core 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lsp-types",
  "proptest",
  "serde",
@@ -937,7 +950,7 @@ dependencies = [
  "js-sys",
  "lex-analysis",
  "lex-babel 0.2.6",
- "lex-core",
+ "lex-core 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lsp-types",
  "serde",
  "serde-wasm-bindgen",
