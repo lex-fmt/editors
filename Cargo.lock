@@ -859,24 +859,10 @@ name = "lex-analysis"
 version = "0.2.7"
 dependencies = [
  "ignore",
- "lex-core 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lex-core",
  "lsp-types",
  "pathdiff",
  "tempfile",
-]
-
-[[package]]
-name = "lex-babel"
-version = "0.2.6"
-dependencies = [
- "comrak",
- "html5ever",
- "lex-core 0.2.2",
- "markup5ever_rcdom",
- "pathdiff",
- "roxmltree",
- "serde",
- "url",
 ]
 
 [[package]]
@@ -887,26 +873,13 @@ checksum = "f08354dda253d06263fd82334c7e7f081753241ed9c3b1418a5d65b00731d8c0"
 dependencies = [
  "comrak",
  "html5ever",
- "lex-core 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lex-core",
  "markup5ever_rcdom",
  "pathdiff",
  "serde",
  "tempfile",
  "url",
  "which",
-]
-
-[[package]]
-name = "lex-core"
-version = "0.2.2"
-dependencies = [
- "logos",
- "once_cell",
- "polymath-rs",
- "regex",
- "serde",
- "serde_json",
- "serde_yaml",
 ]
 
 [[package]]
@@ -930,8 +903,8 @@ version = "0.2.7"
 dependencies = [
  "directories",
  "lex-analysis",
- "lex-babel 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "lex-core 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lex-babel",
+ "lex-core",
  "lsp-types",
  "proptest",
  "serde",
@@ -949,8 +922,8 @@ dependencies = [
  "console_error_panic_hook",
  "js-sys",
  "lex-analysis",
- "lex-babel 0.2.6",
- "lex-core 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lex-babel",
+ "lex-core",
  "lsp-types",
  "serde",
  "serde-wasm-bindgen",
@@ -1544,12 +1517,6 @@ name = "regex-syntax"
 version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
-
-[[package]]
-name = "roxmltree"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3cd14fd5e3b777a7422cca79358c57a8f6e3a703d9ac187448d0daf220c2407f"
 
 [[package]]
 name = "rustix"
