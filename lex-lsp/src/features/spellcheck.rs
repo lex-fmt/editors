@@ -112,7 +112,6 @@ fn get_dictionary(language: &str) -> DictionaryStatus {
         std::path::PathBuf::from("../../dictionaries"),
         std::path::PathBuf::from("editors/lexed/dictionaries"),
         std::path::PathBuf::from("../editors/lexed/dictionaries"),
-        std::path::PathBuf::from("../editors/lexed/dictionaries"),
         // Try absolute path if needed, or user home
     ];
 
