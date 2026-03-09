@@ -1,6 +1,6 @@
 [package]
 name = "lex-lsp"
-version = "0.2.9"
+version = "0.3.0"
 edition = "2021"
 authors = ["lex contributors"]
 description = "Language Server Protocol implementation for the lex format"
@@ -18,7 +18,7 @@ path = "src/bin/lex-lsp.rs"
 
 [dependencies]
 lex-core = { workspace = true }
-lex-analysis = { version = "0.2.8", path = "../lex-analysis" }
+lex-analysis = { version = "0.3.0", path = "../lex-analysis" }
 lex-babel = { workspace = true }
 tower-lsp = "0.20"
 lsp-types = "0.94"
@@ -27,6 +27,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-lex-analysis = { version = "0.2.8", path = "../lex-analysis", features = ["test-support"] }
+lex-analysis = { version = "0.3.0", path = "../lex-analysis", features = ["test-support"] }
 tempfile = "3"
 proptest = { workspace = true }
