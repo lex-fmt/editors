@@ -250,7 +250,15 @@ fn collect_preview<'a>(
             ContentItem::Session(session) => {
                 collect_preview(session.children.iter(), lines, limit);
             }
-            _ => {}
+            ContentItem::VerbatimBlock(verbatim) => {
+                let subject = verbatim.subject.as_string().trim().to_string();
+                if !subject.is_empty() {
+                    lines.push(subject);
+                }
+            }
+            ContentItem::TextLine(_)
+            | ContentItem::VerbatimLine(_)
+            | ContentItem::BlankLineGroup(_) => {}
         }
     }
 }
