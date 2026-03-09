@@ -882,9 +882,9 @@ dependencies = [
 
 [[package]]
 name = "lex-babel"
-version = "0.2.7"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1102d735ea58449a0a50487f70efbae7effa6b36e097f82f6f3e69ef9f43ddfa"
+checksum = "8891c42c6a13f09ac2479c8a6a0ced85cf99424a3d42e58e7026f9f82b2933aa"
 dependencies = [
  "comrak",
  "html5ever",
@@ -915,7 +915,7 @@ dependencies = [
 
 [[package]]
 name = "lex-lsp"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "lex-analysis",
  "lex-babel",
