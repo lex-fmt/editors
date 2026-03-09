@@ -15,7 +15,6 @@ pub const COMMAND_RESOLVE_ANNOTATION: &str = "lex.resolve_annotation";
 pub const COMMAND_TOGGLE_ANNOTATIONS: &str = "lex.toggle_annotations";
 pub const COMMAND_INSERT_ASSET: &str = "lex.insert_asset";
 pub const COMMAND_INSERT_VERBATIM: &str = "lex.insert_verbatim";
-pub const COMMAND_ADD_TO_DICTIONARY: &str = "lex.spellcheck.addToDictionary";
 pub const COMMAND_FOOTNOTES_REORDER: &str = "lex.footnotes.reorder";
 
 pub fn execute_command(command: &str, arguments: &[Value]) -> Result<Option<Value>> {
@@ -92,19 +91,6 @@ pub fn execute_command(command: &str, arguments: &[Value]) -> Result<Option<Valu
                     Ok(Some(Value::String(path.to_string_lossy().to_string())))
                 }
             }
-        }
-        COMMAND_ADD_TO_DICTIONARY => {
-            let word = arguments
-                .first()
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| Error::invalid_params("Missing 'word' argument"))?;
-            let language = arguments
-                .get(1)
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| Error::invalid_params("Missing 'language' argument"))?;
-
-            crate::features::spellcheck::add_to_dictionary(word, language);
-            Ok(None)
         }
         COMMAND_FOOTNOTES_REORDER => {
             let content = arguments

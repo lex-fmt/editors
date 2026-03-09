@@ -15,7 +15,6 @@ use crate::features::references::find_references;
 use crate::features::semantic_tokens::{
     collect_semantic_tokens, LexSemanticToken, SEMANTIC_TOKEN_KINDS,
 };
-use crate::features::spellcheck::LspSpellcheckResult;
 use lex_analysis::completion::{completion_items, CompletionCandidate, CompletionWorkspace};
 use lex_analysis::diagnostics::{
     analyze as analyze_diagnostics, AnalysisDiagnostic, DiagnosticKind,
@@ -33,18 +32,18 @@ use tokio::sync::RwLock;
 use tower_lsp::async_trait;
 use tower_lsp::jsonrpc::{Error, Result};
 use tower_lsp::lsp_types::{
-    CodeAction, CodeActionOrCommand, CodeActionParams, CodeActionProviderCapability,
-    CodeActionResponse, CompletionItem, CompletionOptions, CompletionParams, CompletionResponse,
-    DidChangeConfigurationParams, DocumentFormattingParams, DocumentLink, DocumentLinkOptions,
-    DocumentLinkParams, DocumentRangeFormattingParams, DocumentSymbol, DocumentSymbolParams,
-    DocumentSymbolResponse, ExecuteCommandOptions, ExecuteCommandParams, FoldingRange,
-    FoldingRangeParams, FoldingRangeProviderCapability, GotoDefinitionParams,
-    GotoDefinitionResponse, Hover, HoverContents, HoverParams, HoverProviderCapability,
-    InitializeParams, InitializeResult, InitializedParams, Location, MarkupContent, MarkupKind,
-    OneOf, Position, Range, ReferenceParams, SemanticToken, SemanticTokenType, SemanticTokens,
-    SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions, SemanticTokensParams,
-    SemanticTokensResult, ServerCapabilities, ServerInfo, TextDocumentItem,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Url, WorkDoneProgressOptions,
+    CodeActionParams, CodeActionProviderCapability, CodeActionResponse, CompletionItem,
+    CompletionOptions, CompletionParams, CompletionResponse, DidChangeConfigurationParams,
+    DocumentFormattingParams, DocumentLink, DocumentLinkOptions, DocumentLinkParams,
+    DocumentRangeFormattingParams, DocumentSymbol, DocumentSymbolParams, DocumentSymbolResponse,
+    ExecuteCommandOptions, ExecuteCommandParams, FoldingRange, FoldingRangeParams,
+    FoldingRangeProviderCapability, GotoDefinitionParams, GotoDefinitionResponse, Hover,
+    HoverContents, HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
+    InitializedParams, Location, MarkupContent, MarkupKind, OneOf, Position, Range,
+    ReferenceParams, SemanticToken, SemanticTokenType, SemanticTokens, SemanticTokensFullOptions,
+    SemanticTokensLegend, SemanticTokensOptions, SemanticTokensParams, SemanticTokensResult,
+    ServerCapabilities, ServerInfo, TextDocumentItem, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextEdit, Url, WorkDoneProgressOptions,
 };
 use tower_lsp::Client;
 
@@ -104,7 +103,6 @@ pub trait FeatureProvider: Send + Sync + 'static {
         trigger_char: Option<&str>,
     ) -> Vec<CompletionCandidate>;
     fn execute_command(&self, command: &str, arguments: &[Value]) -> Result<Option<Value>>;
-    fn check_spelling(&self, document: &Document, language: &str) -> LspSpellcheckResult;
 }
 
 #[derive(Default)]
@@ -184,10 +182,6 @@ impl FeatureProvider for DefaultFeatureProvider {
     fn execute_command(&self, command: &str, arguments: &[Value]) -> Result<Option<Value>> {
         execute_command(command, arguments)
     }
-
-    fn check_spelling(&self, document: &Document, language: &str) -> LspSpellcheckResult {
-        crate::features::spellcheck::check_document(document, language)
-    }
 }
 
 #[derive(Clone)]
@@ -260,32 +254,11 @@ fn semantic_tokens_legend() -> SemanticTokensLegend {
     }
 }
 
-#[derive(Debug, Default, Clone)]
-pub struct LexConfiguration {
-    pub spellcheck: SpellcheckConfig,
-}
-
-#[derive(Debug, Clone)]
-pub struct SpellcheckConfig {
-    pub enabled: bool,
-    pub language: String,
-}
-
-impl Default for SpellcheckConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            language: "en_US".to_string(),
-        }
-    }
-}
-
 pub struct LexLanguageServer<C = Client, P = DefaultFeatureProvider> {
     _client: C,
     documents: DocumentStore,
     features: Arc<P>,
     workspace_roots: RwLock<Vec<PathBuf>>,
-    config: RwLock<LexConfiguration>,
 }
 
 impl LexLanguageServer<Client, DefaultFeatureProvider> {
@@ -305,7 +278,6 @@ where
             documents: DocumentStore::default(),
             features,
             workspace_roots: RwLock::new(Vec::new()),
-            config: RwLock::new(LexConfiguration::default()),
         }
     }
 
@@ -313,28 +285,10 @@ where
         if let Some(entry) = self.documents.upsert(uri.clone(), text).await {
             // Run analysis diagnostics
             let analysis_diags = analyze_diagnostics(&entry.document);
-
-            // Combine diagnostics
-            let mut all_diagnostics = Vec::new();
-
-            let config = self.config.read().await;
-            if config.spellcheck.enabled {
-                let spell_result = self
-                    .features
-                    .check_spelling(&entry.document, &config.spellcheck.language);
-                if let Some(error) = spell_result.error {
-                    self._client.show_message(MessageType::WARNING, error).await;
-                }
-                all_diagnostics.extend(spell_result.diagnostics);
-            }
-
-            // Convert analysis diagnostics to LSP diagnostics
-            for diag in analysis_diags {
-                all_diagnostics.push(to_lsp_diagnostic(diag));
-            }
+            let diagnostics: Vec<_> = analysis_diags.into_iter().map(to_lsp_diagnostic).collect();
 
             self._client
-                .publish_diagnostics(uri, all_diagnostics, None)
+                .publish_diagnostics(uri, diagnostics, None)
                 .await;
         }
     }
@@ -765,7 +719,6 @@ where
                     commands::COMMAND_TOGGLE_ANNOTATIONS.to_string(),
                     commands::COMMAND_INSERT_ASSET.to_string(),
                     commands::COMMAND_INSERT_VERBATIM.to_string(),
-                    commands::COMMAND_ADD_TO_DICTIONARY.to_string(),
                     commands::COMMAND_FOOTNOTES_REORDER.to_string(),
                 ],
                 work_done_progress_options: WorkDoneProgressOptions::default(),
@@ -793,20 +746,7 @@ where
         self.parse_and_store(uri, text).await;
     }
 
-    async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
-        let settings = params.settings;
-
-        let mut config = self.config.write().await;
-
-        if let Some(spellcheck) = settings.get("spellcheck") {
-            if let Some(enabled) = spellcheck.get("enabled").and_then(|v| v.as_bool()) {
-                config.spellcheck.enabled = enabled;
-            }
-            if let Some(language) = spellcheck.get("language").and_then(|v| v.as_str()) {
-                config.spellcheck.language = language.to_string();
-            }
-        }
-
+    async fn did_change_configuration(&self, _params: DidChangeConfigurationParams) {
         // Re-check all documents with new settings
         let uris: Vec<Url> = self
             .documents
@@ -816,7 +756,6 @@ where
             .keys()
             .cloned()
             .collect();
-        drop(config); // Release lock before async calls
 
         for uri in uris {
             if let Some(entry) = self.documents.get(&uri).await {
@@ -1018,15 +957,6 @@ where
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
         let mut actions = Vec::new();
 
-        let config = self.config.read().await;
-        let language = config.spellcheck.language.clone();
-
-        eprintln!(
-            "[LSP] code_action called. Language: {language}, Diagnostics count: {}",
-            params.context.diagnostics.len()
-        );
-
-        // 0. Compute available actions (Lex features)
         if let Some(entry) = self.documents.get(&params.text_document.uri).await {
             let lex_actions = crate::features::available_actions::compute_actions(
                 &entry.document,
@@ -1037,63 +967,6 @@ where
                 actions.push(tower_lsp::lsp_types::CodeActionOrCommand::CodeAction(
                     action,
                 ));
-            }
-        }
-
-        for diagnostic in params.context.diagnostics.clone() {
-            eprintln!(
-                "[LSP] Inspecting diagnostic source: {:?}",
-                diagnostic.source
-            );
-            if diagnostic.source.as_deref() == Some("lex-spell") {
-                // It's a spelling error
-                let word = diagnostic.message.trim_start_matches("Unknown word: ");
-
-                // 1. Suggestions
-                let suggestions = crate::features::spellcheck::suggest_corrections(word, &language);
-                for suggestion in suggestions {
-                    let action = CodeAction {
-                        title: suggestion.clone(),
-                        kind: Some(tower_lsp::lsp_types::CodeActionKind::QUICKFIX),
-                        diagnostics: Some(vec![diagnostic.clone()]),
-                        edit: Some(tower_lsp::lsp_types::WorkspaceEdit {
-                            changes: Some(HashMap::from([(
-                                params.text_document.uri.clone(),
-                                vec![TextEdit {
-                                    range: diagnostic.range,
-                                    new_text: suggestion,
-                                }],
-                            )])),
-                            ..Default::default()
-                        }),
-                        command: None,
-                        is_preferred: None,
-                        disabled: None,
-                        data: None,
-                    };
-                    actions.push(CodeActionOrCommand::CodeAction(action));
-                }
-
-                // 2. Add to dictionary
-                let add_action = CodeAction {
-                    title: format!("Add '{word}' to dictionary"),
-                    kind: Some(tower_lsp::lsp_types::CodeActionKind::QUICKFIX),
-                    diagnostics: Some(vec![diagnostic.clone()]),
-                    edit: None,
-                    command: Some(tower_lsp::lsp_types::Command {
-                        title: "Add to dictionary".to_string(),
-                        command: commands::COMMAND_ADD_TO_DICTIONARY.to_string(),
-                        arguments: Some(vec![
-                            json!(word),
-                            json!(language),
-                            json!(params.text_document.uri.to_string()),
-                        ]),
-                    }),
-                    is_preferred: None,
-                    disabled: None,
-                    data: None,
-                };
-                actions.push(CodeActionOrCommand::CodeAction(add_action));
             }
         }
 
@@ -1278,29 +1151,6 @@ where
                                     )));
                                 }
                             }
-                        }
-                    }
-                }
-                Ok(None)
-            }
-            commands::COMMAND_ADD_TO_DICTIONARY => {
-                let word = params.arguments.first().and_then(|v| v.as_str());
-                let language = params.arguments.get(1).and_then(|v| v.as_str());
-                let uri_str = params.arguments.get(2).and_then(|v| v.as_str());
-
-                if let (Some(word), Some(language), Some(uri_str)) = (word, language, uri_str) {
-                    crate::features::spellcheck::add_to_dictionary(word, language);
-
-                    // Re-validate
-                    if let Ok(uri) = Url::parse(uri_str) {
-                        if let Some(document) = self.document(&uri).await {
-                            let spell_result = self.features.check_spelling(&document, language);
-                            if let Some(error) = spell_result.error {
-                                self._client.show_message(MessageType::WARNING, error).await;
-                            }
-                            self._client
-                                .publish_diagnostics(uri, spell_result.diagnostics, None)
-                                .await;
                         }
                     }
                 }
@@ -1517,14 +1367,6 @@ mod tests {
                 Ok(Some(Value::String("executed".into())))
             } else {
                 Ok(None)
-            }
-        }
-
-        fn check_spelling(&self, _: &Document, _: &str) -> LspSpellcheckResult {
-            LspSpellcheckResult {
-                diagnostics: Vec::new(),
-                error: None,
-                misspelled_count: 0,
             }
         }
     }
