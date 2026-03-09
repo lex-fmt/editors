@@ -18,7 +18,7 @@ path = "src/bin/lex-lsp.rs"
 
 [dependencies]
 lex-core = { workspace = true }
-lex-analysis = { version = "0.2.6", path = "../lex-analysis" }
+lex-analysis = { version = "0.2.7", path = "../lex-analysis" }
 lex-babel = { workspace = true }
 tower-lsp = "0.20"
 lsp-types = "0.94"
@@ -29,6 +29,6 @@ spellbook = "0.3.5"
 directories = "6.0.0"
 
 [dev-dependencies]
-lex-analysis = { version = "0.2.4", path = "../lex-analysis", features = ["test-support"] }
+lex-analysis = { version = "0.2.7", path = "../lex-analysis", features = ["test-support"] }
 tempfile = "3"
 proptest = { workspace = true }
