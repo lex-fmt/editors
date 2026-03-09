@@ -354,7 +354,15 @@ where
             }
         }
         ContentItem::Annotation(annotation) => visit_annotation_text(annotation, f),
-        _ => {}
+        ContentItem::VerbatimBlock(verbatim) => {
+            f(&verbatim.subject);
+            for annotation in verbatim.annotations() {
+                visit_annotation_text(annotation, f);
+            }
+        }
+        ContentItem::TextLine(_)
+        | ContentItem::VerbatimLine(_)
+        | ContentItem::BlankLineGroup(_) => {}
     }
 }
 
