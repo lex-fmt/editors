@@ -36,7 +36,7 @@ fn session_symbols(session: &Session, is_root: bool) -> Vec<LexDocumentSymbol> {
         symbols.push(LexDocumentSymbol {
             name: summarize_text(&session.title, "Session"),
             detail: Some(format!("{} item(s)", session.children.len())),
-            kind: SymbolKind::NAMESPACE,
+            kind: SymbolKind::NAMESPACE, // § sections/scopes
             range: session.range().clone(),
             selection_range,
             children,
@@ -78,7 +78,7 @@ fn definition_symbol(definition: &Definition) -> LexDocumentSymbol {
     LexDocumentSymbol {
         name: summarize_text(&definition.subject, "Definition"),
         detail: Some("definition".to_string()),
-        kind: SymbolKind::STRUCT,
+        kind: SymbolKind::KEY,
         range: definition.range().clone(),
         selection_range,
         children,
@@ -107,7 +107,7 @@ fn verbatim_symbol(verbatim: &Verbatim) -> LexDocumentSymbol {
             summarize_text(&verbatim.subject, "Verbatim block")
         ),
         detail: Some(verbatim.closing_data.label.value.clone()),
-        kind: SymbolKind::OBJECT,
+        kind: SymbolKind::CONSTANT,
         range: verbatim.range().clone(),
         selection_range: verbatim
             .subject
@@ -130,7 +130,7 @@ fn paragraph_symbol(paragraph: &Paragraph) -> LexDocumentSymbol {
     LexDocumentSymbol {
         name,
         detail: None,
-        kind: SymbolKind::STRING,
+        kind: SymbolKind::FILE,
         range: paragraph.range().clone(),
         selection_range: paragraph.range().clone(),
         children,
@@ -150,7 +150,7 @@ fn list_item_symbol(list_item: &ListItem) -> LexDocumentSymbol {
     LexDocumentSymbol {
         name: format!("{} {}", list_item.marker.as_string(), name),
         detail: None,
-        kind: SymbolKind::FIELD, // Or Property/Variable
+        kind: SymbolKind::ENUM_MEMBER,
         range: list_item.range().clone(),
         selection_range: list_item.range().clone(),
         children,
@@ -243,7 +243,7 @@ mod tests {
         let _verbatim_symbol = session
             .children
             .iter()
-            .find(|child| child.name.contains("Cache") && child.kind == SymbolKind::OBJECT)
+            .find(|child| child.name.contains("Cache") && child.kind == SymbolKind::CONSTANT)
             .expect("verbatim symbol not found");
     }
 
@@ -272,7 +272,7 @@ mod tests {
             .iter()
             .find(|s| s.name.contains("Hello"))
             .expect("Paragraph symbol not found");
-        assert_eq!(paragraph_symbol.kind, SymbolKind::STRING);
+        assert_eq!(paragraph_symbol.kind, SymbolKind::FILE);
 
         // Check for list
         let list_symbol = symbols

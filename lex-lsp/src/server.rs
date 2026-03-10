@@ -1257,7 +1257,7 @@ mod tests {
             vec![LexDocumentSymbol {
                 name: "symbol".into(),
                 detail: None,
-                kind: SymbolKind::STRING,
+                kind: SymbolKind::FILE,
                 range: AstRange::new(0..5, AstPosition::new(0, 0), AstPosition::new(0, 5)),
                 selection_range: AstRange::new(
                     0..5,
