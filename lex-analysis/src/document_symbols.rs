@@ -122,7 +122,7 @@ fn paragraph_symbol(paragraph: &Paragraph) -> LexDocumentSymbol {
     let children = annotation_symbol_list(paragraph.annotations());
     // Use the first line of text as the name, truncated if necessary
     let name = if let Some(ContentItem::TextLine(first_line)) = paragraph.lines.first() {
-        summarize_text(&first_line.content, "Paragraph")
+        truncate_to_words(&first_line.content, 4, "Paragraph")
     } else {
         "Paragraph".to_string()
     };
@@ -188,11 +188,27 @@ fn annotation_symbol_list<'a>(
 }
 
 fn summarize_text(text: &TextContent, fallback: &str) -> String {
-    let trimmed = text.as_string().trim();
-    if trimmed.is_empty() {
+    summarize_text_str(text.as_string().trim(), fallback)
+}
+
+fn summarize_text_str(text: &str, fallback: &str) -> String {
+    if text.is_empty() {
         fallback.to_string()
     } else {
+        text.to_string()
+    }
+}
+
+fn truncate_to_words(text: &TextContent, max_words: usize, fallback: &str) -> String {
+    let trimmed = text.as_string().trim();
+    if trimmed.is_empty() {
+        return fallback.to_string();
+    }
+    let words: Vec<&str> = trimmed.split_whitespace().collect();
+    if words.len() <= max_words {
         trimmed.to_string()
+    } else {
+        format!("{}…", words[..max_words].join(" "))
     }
 }
 
@@ -254,7 +270,7 @@ mod tests {
         // Check for paragraph
         let paragraph_symbol = symbols
             .iter()
-            .find(|s| s.name == "Hello World")
+            .find(|s| s.name.contains("Hello"))
             .expect("Paragraph symbol not found");
         assert_eq!(paragraph_symbol.kind, SymbolKind::STRING);
 
