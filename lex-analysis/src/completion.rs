@@ -115,6 +115,17 @@ pub fn completion_items(
         if trigger == "|" {
             return table_row_completions(document, position);
         }
+        if trigger == ":" {
+            // Only offer verbatim labels when actually at a verbatim block start or
+            // inside an existing verbatim label. Don't pollute completion for
+            // arbitrary colons (e.g. definition subjects like "Ideas:").
+            if is_at_potential_verbatim_start(document, position, current_line)
+                || is_inside_verbatim_label(document, position)
+            {
+                return verbatim_label_completions(document);
+            }
+            return Vec::new();
+        }
     }
 
     match detect_context(document, position, current_line) {
@@ -782,6 +793,19 @@ Code sample:
 
         assert!(completions.iter().any(|c| c.label == "doc.code"));
         assert!(completions.iter().any(|c| c.label == "rust"));
+    }
+
+    #[test]
+    fn colon_trigger_in_definition_subject_returns_nothing() {
+        let text = "Ideas:";
+        let document = parsing::parse_document(text).expect("parses");
+        let pos = Position::new(0, 6); // after "Ideas:"
+        let completions = completion_items(&document, pos, Some("Ideas:"), None, Some(":"));
+        assert!(
+            completions.is_empty(),
+            "colon in definition subject should not trigger completions, got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
     }
 
     #[test]
