@@ -538,7 +538,13 @@ fn split_token_on_lines(
     text: &str,
     line_offsets: &[usize],
 ) -> Vec<(u32, u32, u32)> {
-    let slice = &text[token.range.span.clone()];
+    let span = &token.range.span;
+    if span.start > text.len() || span.end > text.len() {
+        // Defensive: skip tokens whose byte span exceeds the source text.
+        // This can happen when the parser produces out-of-bounds ranges.
+        return Vec::new();
+    }
+    let slice = &text[span.clone()];
     let mut segments = Vec::new();
     let mut current_line = token.range.start.line as u32;
     let mut segment_start = 0;
