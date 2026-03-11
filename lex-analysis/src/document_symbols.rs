@@ -36,7 +36,7 @@ fn session_symbols(session: &Session, is_root: bool) -> Vec<LexDocumentSymbol> {
         symbols.push(LexDocumentSymbol {
             name: summarize_text(&session.title, "Session"),
             detail: Some(format!("{} item(s)", session.children.len())),
-            kind: SymbolKind::NAMESPACE, // § sections/scopes
+            kind: SymbolKind::STRUCT, // § sections/scopes
             range: session.range().clone(),
             selection_range,
             children,
@@ -78,7 +78,7 @@ fn definition_symbol(definition: &Definition) -> LexDocumentSymbol {
     LexDocumentSymbol {
         name: summarize_text(&definition.subject, "Definition"),
         detail: Some("definition".to_string()),
-        kind: SymbolKind::KEY,
+        kind: SymbolKind::PROPERTY,
         range: definition.range().clone(),
         selection_range,
         children,
@@ -92,7 +92,7 @@ fn list_symbol(list: &List) -> LexDocumentSymbol {
     LexDocumentSymbol {
         name: format!("List ({} items)", list.items.len()),
         detail: None,
-        kind: SymbolKind::ARRAY,
+        kind: SymbolKind::ENUM,
         range: list.range().clone(),
         selection_range: list.range().clone(),
         children,
@@ -130,7 +130,7 @@ fn paragraph_symbol(paragraph: &Paragraph) -> LexDocumentSymbol {
     LexDocumentSymbol {
         name,
         detail: None,
-        kind: SymbolKind::FILE,
+        kind: SymbolKind::STRING,
         range: paragraph.range().clone(),
         selection_range: paragraph.range().clone(),
         children,
@@ -174,7 +174,7 @@ fn annotation_symbol(annotation: &Annotation) -> LexDocumentSymbol {
                     .join(", "),
             )
         },
-        kind: SymbolKind::EVENT,
+        kind: SymbolKind::INTERFACE,
         range: annotation.range().clone(),
         selection_range: annotation.header_location().clone(),
         children,
@@ -272,7 +272,7 @@ mod tests {
             .iter()
             .find(|s| s.name.contains("Hello"))
             .expect("Paragraph symbol not found");
-        assert_eq!(paragraph_symbol.kind, SymbolKind::FILE);
+        assert_eq!(paragraph_symbol.kind, SymbolKind::STRING);
 
         // Check for list
         let list_symbol = symbols
